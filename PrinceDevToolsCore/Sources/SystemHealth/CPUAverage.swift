@@ -14,7 +14,7 @@ public struct CPUTicks: Equatable, Sendable {
         self.nice = nice
     }
 
-    fileprivate func busyAndTotal(since old: CPUTicks) -> (busy: UInt64, total: UInt64) {
+    func busyAndTotal(since old: CPUTicks) -> (busy: UInt64, total: UInt64) {
         let busy = UInt64(user &- old.user) + UInt64(system &- old.system) + UInt64(nice &- old.nice)
         return (busy, busy + UInt64(idle &- old.idle))
     }

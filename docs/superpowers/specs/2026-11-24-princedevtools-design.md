@@ -260,9 +260,10 @@ Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
   (prince-clockin holds App Nap off while its timer waits; copied here, with a timer always armed,
   that would hold it off for life.)
 - **While the panel is open:** a 2 s timer (tolerance at least 0.2 s) re-reads process count, disk,
-  swap and memory pressure for the cards. It never writes the CPU ring and never rescans
-  processes; it stops when the panel closes.
-- **No subprocesses**, no polling of other apps, no per-process scan on any timer.
+  swap and memory pressure for the cards. It never writes the CPU ring, and scans processes only
+  when a message appears or the panel opens on one (see Culprit); it stops when the panel closes.
+- **No subprocesses**, no polling of other apps, and no per-process scan on a tick that shows no new
+  message.
 - **The Metal timer:** once SwiftUI has drawn, the GPU driver wakes the app every 3 s for life,
   measured in prince-clockin and seen in Siri and other system apps too. This design accepts it, as
   prince-clockin did, and the budget below holds it to that.

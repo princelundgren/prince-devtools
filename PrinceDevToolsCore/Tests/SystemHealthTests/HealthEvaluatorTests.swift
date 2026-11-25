@@ -154,6 +154,63 @@ final class HealthEvaluatorTests: XCTestCase {
         XCTAssertEqual(evaluator.evaluate(readings, settings: stricter).cpu, .red)
     }
 
+    func testRelaxingCPUThresholdPastTheReadingClearsRed() {
+        var evaluator = HealthEvaluator()
+        let readings = HealthReadings(cpu: fullCPU(82))
+        XCTAssertEqual(evaluator.evaluate(readings, settings: settings).cpu, .red)
+        var relaxed = settings
+        relaxed.cpuPercent = 85
+        let status = evaluator.evaluate(readings, settings: relaxed)
+        XCTAssertEqual(status.cpu, .green)
+        XCTAssertEqual(status.messages, [])
+    }
+
+    func testChangingTheCPUWindowClearsRedInsideTheBand() {
+        var evaluator = HealthEvaluator()
+        _ = evaluator.evaluate(HealthReadings(cpu: fullCPU(82)), settings: settings)
+        var longer = settings
+        longer.cpuWindowMinutes = 10
+        let status = evaluator.evaluate(HealthReadings(cpu: fullCPU(78)), settings: longer)
+        XCTAssertEqual(status.cpu, .green)
+    }
+
+    func testRelaxingDiskThresholdPastTheReadingClearsRed() {
+        var evaluator = HealthEvaluator()
+        let readings = HealthReadings(diskFreeBytes: 29_000_000_000)
+        XCTAssertEqual(evaluator.evaluate(readings, settings: settings).disk, .red)
+        var relaxed = settings
+        relaxed.diskFreeGB = 28
+        let status = evaluator.evaluate(readings, settings: relaxed)
+        XCTAssertEqual(status.disk, .green)
+        XCTAssertEqual(status.messages, [])
+    }
+
+    func testRelaxingProcessShareClearsRedInsideTheBand() {
+        var evaluator = HealthEvaluator()
+        let readings = HealthReadings(processCount: 3300, processLimit: 4000)
+        XCTAssertEqual(evaluator.evaluate(readings, settings: settings).processes, .red)
+        var relaxed = settings
+        relaxed.processSharePercent = 85
+        let status = evaluator.evaluate(readings, settings: relaxed)
+        XCTAssertEqual(status.processes, .green)
+        XCTAssertEqual(status.messages, [])
+    }
+
+    func testUnrelatedSettingChangeKeepsRedInsideItsBand() {
+        var evaluator = HealthEvaluator()
+        _ = evaluator.evaluate(
+            HealthReadings(cpu: fullCPU(82), diskFreeBytes: 29_000_000_000, processCount: 3300, processLimit: 4000),
+            settings: settings)
+        var unrelated = settings
+        unrelated.memoryRedLevel = .warning
+        let status = evaluator.evaluate(
+            HealthReadings(cpu: fullCPU(78), diskFreeBytes: 31_000_000_000, processCount: 3100, processLimit: 4000),
+            settings: unrelated)
+        XCTAssertEqual(status.cpu, .red)
+        XCTAssertEqual(status.disk, .red)
+        XCTAssertEqual(status.processes, .red)
+    }
+
     func testRedFlagClearsWhenItsMetricReadsNil() {
         var evaluator = HealthEvaluator()
         _ = evaluator.evaluate(HealthReadings(diskFreeBytes: 1_000_000_000), settings: settings)

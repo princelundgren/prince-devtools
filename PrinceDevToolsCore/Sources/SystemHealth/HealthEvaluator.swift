@@ -106,7 +106,8 @@ public struct HealthStatus: Equatable, Sendable {
 /// CPU, disk and processes turn red past their threshold and clear only once back past it by a
 /// margin, so a reading sitting at the line does not flicker. The evaluator holds those red flags;
 /// call it on one instance, in order. Thresholds are read from `settings` on every call, so a
-/// change applies at once.
+/// change applies at once: a metric whose threshold or CPU window changed starts again from green,
+/// and the others keep their margin.
 public struct HealthEvaluator: Sendable {
     static let cpuClearMarginPercent = 5.0
     static let diskClearMarginGB = 2
@@ -116,10 +117,18 @@ public struct HealthEvaluator: Sendable {
     private var isCPURed = false
     private var isDiskRed = false
     private var isProcessesRed = false
+    private var previousSettings: HealthSettings?
 
     public init() {}
 
     public mutating func evaluate(_ readings: HealthReadings, settings: HealthSettings) -> HealthStatus {
+        if let previousSettings {
+            if previousSettings.cpuPercent != settings.cpuPercent
+                || previousSettings.cpuWindowMinutes != settings.cpuWindowMinutes { isCPURed = false }
+            if previousSettings.diskFreeGB != settings.diskFreeGB { isDiskRed = false }
+            if previousSettings.processSharePercent != settings.processSharePercent { isProcessesRed = false }
+        }
+        previousSettings = settings
         var messages: [HealthMessage] = []
 
         let memory = memoryState(readings.memory, settings: settings)

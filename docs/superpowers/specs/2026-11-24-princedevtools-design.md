@@ -208,7 +208,8 @@ single app must not become overwhelming (owner).
   of the whole machine, and the owner's concern is the whole system being busy.
 - **Hysteresis** for the polled metrics: CPU, disk and processes turn red past their threshold
   and clear only once back past it by a margin (5 CPU points, 2 GB, 5 % of the limit), so a value
-  sitting at the line doesn't flicker. Memory and thermal follow the kernel's own levels.
+  sitting at the line doesn't flicker. Changing a metric's own threshold drops its red first, so
+  the new line is judged at once. Memory and thermal follow the kernel's own levels.
 - **Thermal state:** not a card. `ProcessInfo.processInfo.thermalState` is read at launch and
   after wake, before registering for `thermalStateDidChangeNotification` (the header requires the
   property to be read first, and posts the notification on a global queue, so the handler hops to

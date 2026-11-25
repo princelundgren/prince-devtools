@@ -186,8 +186,9 @@ single app must not become overwhelming (owner).
   leaves the card on "Not known yet".
 - **Memory, yellow:** shown on the card as Apple's middle state, never red and never a message:
   Apple's guide says yellow means the Mac "might eventually need more RAM", red that it "needs
-  more RAM". That warning and critical match Activity Monitor's yellow and red is checked once by
-  the builder (see Testing) and stops the build if it doesn't hold.
+  more RAM". Warning and critical match Activity Monitor's yellow and red: under
+  `memory_pressure -S` on macOS 27.2.1 (26B131), 2026-11-25, the sysctl read 2 while the graph
+  was yellow and 4 while it was red.
 - **Disk** (owner, 2026-11-24): real free space, matching `df` and `diskutil`, not Apple's
   "important usage" figure, which counts purgeable caches and snapshots (169 GB against 70 GB on
   one Mac) and costs 6 to 37 ms of CPU a read. The card can go red while macOS could still purge
@@ -296,9 +297,9 @@ A measurement past its budget blocks the release.
   the culprit.
 - **Manual checks on a real Mac:**
   - Memory handling with `sudo memory_pressure -S -l warn` and `-l critical` (simulated; it
-    needs root, so the maintainer runs it). The one real
-    comparison with Activity Monitor (`memory_pressure -l`, which allocates memory and can make
-    the system kill idle processes) runs only on a Mac with no other work running.
+    needs root). The simulated level moves Activity Monitor's graph too, so the real
+    `memory_pressure -l`, which allocates memory and can make the system kill idle processes, is
+    not needed.
   - CPU held high by a busy loop for longer than the window, and a short spike that must not turn
     red.
   - Disk and process thresholds set past the current value; Activity Monitor opening from the

@@ -186,8 +186,9 @@ single app must not become overwhelming (owner).
   leaves the card on "Not known yet".
 - **Memory, yellow:** shown on the card as Apple's middle state, never red and never a message:
   Apple's guide says yellow means the Mac "might eventually need more RAM", red that it "needs
-  more RAM". That warning and critical match Activity Monitor's yellow and red is checked once by
-  the builder (see Testing) and stops the build if it doesn't hold.
+  more RAM". Warning and critical match Activity Monitor's yellow and red: under
+  `memory_pressure -S` on macOS 27.2.1 (26B131), 2026-11-25, the sysctl read 2 while the graph
+  was yellow and 4 while it was red.
 - **Disk** (owner, 2026-11-24): real free space, matching `df` and `diskutil`, not Apple's
   "important usage" figure, which counts purgeable caches and snapshots (169 GB against 70 GB on
   one Mac) and costs 6 to 37 ms of CPU a read. The card can go red while macOS could still purge
@@ -208,7 +209,8 @@ single app must not become overwhelming (owner).
   of the whole machine, and the owner's concern is the whole system being busy.
 - **Hysteresis** for the polled metrics: CPU, disk and processes turn red past their threshold
   and clear only once back past it by a margin (5 CPU points, 2 GB, 5 % of the limit), so a value
-  sitting at the line doesn't flicker. Memory and thermal follow the kernel's own levels.
+  sitting at the line doesn't flicker. Changing a metric's own threshold drops its red first, so
+  the new line is judged at once. Memory and thermal follow the kernel's own levels.
 - **Thermal state:** not a card. `ProcessInfo.processInfo.thermalState` is read at launch and
   after wake, before registering for `thermalStateDidChangeNotification` (the header requires the
   property to be read first, and posts the notification on a global queue, so the handler hops to
@@ -250,7 +252,8 @@ share 50 to 95 %. A change is evaluated at once, not at the next tick.
 Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
 
 - **Event-driven first.** Memory pressure and thermal state arrive as system events. Sleep and
-  wake come from `NSWorkspace.shared.notificationCenter`; sleep pauses the timer, wake takes every
+  wake come from IOKit's `IORegisterForSystemPower`, not `NSWorkspace` (its observers drew AppKit's
+  power-queue deliveries, extra wakeups while idle); sleep pauses the timer, wake takes every
   reading at once and re-arms it.
 - **At launch and wake,** every card is read once at once, then the timer is armed.
 - **One timer for the rest:** every 60 s with about 10 s tolerance, so the system can coalesce it,
@@ -261,8 +264,9 @@ Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
   (prince-clockin holds App Nap off while its timer waits; copied here, with a timer always armed,
   that would hold it off for life.)
 - **While the panel is open:** a 2 s timer (tolerance at least 0.2 s) re-reads process count, disk,
-  swap and memory pressure for the cards. It never writes the CPU ring, and scans processes only
-  when a message appears or the panel opens on one (see Culprit); it stops when the panel closes.
+  swap and memory pressure for the cards, and the panel takes the same reading as it opens. It
+  never writes the CPU ring, and scans processes only when a message appears or the panel opens
+  on one (see Culprit); it stops when the panel closes.
 - **No subprocesses**, no polling of other apps, and no per-process scan on a tick that shows no new
   message.
 - **The Metal timer:** once SwiftUI has drawn, the GPU driver wakes the app every 3 s for life,
@@ -285,6 +289,10 @@ Measured by the maintainer at the keyboard, since `powermetrics` needs root:
 
 A measurement past its budget blocks the release.
 
+Idle wakeups on macOS 27.2.1, 2026-11-25: 1.5 a minute by this method and 1.22 over the next 30
+minutes, which the owner counts as within "about 1". `powermetrics` reads Intr to 0.01 a second,
+so the 60 s tick alone shows as 1.2 a minute.
+
 ## Testing
 
 - **`SystemHealth` unit tests** with fake readings: the CPU average across a counter wrap, with
@@ -294,9 +302,9 @@ A measurement past its budget blocks the release.
   the culprit.
 - **Manual checks on a real Mac:**
   - Memory handling with `sudo memory_pressure -S -l warn` and `-l critical` (simulated; it
-    needs root, so the maintainer runs it). The one real
-    comparison with Activity Monitor (`memory_pressure -l`, which allocates memory and can make
-    the system kill idle processes) runs only on a Mac with no other work running.
+    needs root). The simulated level moves Activity Monitor's graph too, so the real
+    `memory_pressure -l`, which allocates memory and can make the system kill idle processes, is
+    not needed.
   - CPU held high by a busy loop for longer than the window, and a short spike that must not turn
     red.
   - Disk and process thresholds set past the current value; Activity Monitor opening from the

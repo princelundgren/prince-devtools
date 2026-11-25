@@ -2,7 +2,9 @@ import Darwin
 
 /// The ratio that converts Mach absolute time units to nanoseconds.
 public struct MachTimebase: Sendable {
+    /// Numerator of the Mach-units-to-nanoseconds ratio.
     public let numer: UInt32
+    /// Denominator of the Mach-units-to-nanoseconds ratio; never zero.
     public let denom: UInt32
 
     public init(numer: UInt32, denom: UInt32) {
@@ -27,6 +29,7 @@ public struct MachTimebase: Sendable {
 public struct ProcessUsage: Sendable, Equatable {
     public let pid: pid_t
     public let name: String
+    /// The process's physical footprint, in bytes.
     public let footprintBytes: UInt64
     /// Cumulative user plus system CPU time in Mach time units.
     public let cpuTime: UInt64
@@ -49,7 +52,7 @@ public enum Culprit: Sendable, Equatable {
     case mostlySystem
 }
 
-/// Picks the process behind a message. A tie goes to the alphabetically first name, so repeated
+/// Picks the process behind a message. A tie goes to the first name in sort order, so repeated
 /// scans pick the same process.
 public enum CulpritFinder {
     /// The process with the largest footprint, or `nil` for an empty scan.

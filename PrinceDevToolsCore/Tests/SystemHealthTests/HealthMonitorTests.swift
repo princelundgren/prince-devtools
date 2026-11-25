@@ -184,6 +184,41 @@ final class HealthMonitorTests: XCTestCase {
         monitor.stop()
     }
 
+    func testOpeningThePanelTakesAFreshPolledReadingWithoutTouchingCPUOrProcesses() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        fake.set {
+            $0.disk = 10 * self.gigabyte
+            $0.swap = 3_000_000
+        }
+
+        monitor.panelOpened()
+
+        XCTAssertEqual(monitor.readings.diskFreeBytes, 10 * gigabyte)
+        XCTAssertEqual(monitor.readings.swapUsedBytes, 3_000_000)
+        XCTAssertEqual(monitor.status.disk, .red)
+        XCTAssertEqual(fake.reads(.diskFreeBytes), 2)
+        XCTAssertEqual(fake.reads(.cpuTicks), 1)
+        XCTAssertEqual(fake.reads(.processLimit), 1)
+        await monitor.culpritSearchesFinished()
+        XCTAssertEqual(fake.reads(.processUsages), 0, "disk has no culprit")
+        monitor.stop()
+    }
+
+    func testOpeningThePanelOnANewMessageStartsOneCulpritSearch() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        fake.set { $0.memory = .critical }
+
+        monitor.panelOpened()
+        await monitor.culpritSearchesFinished()
+
+        XCTAssertEqual(fake.reads(.processUsages), 1)
+        monitor.stop()
+    }
+
     func testPanelTickRereadsCountDiskSwapMemoryOnly() async {
         let fake = FakeSystem()
         let (monitor, _) = makeMonitor(fake)

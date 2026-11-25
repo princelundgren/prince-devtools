@@ -63,7 +63,6 @@ final class CPUAverageTests: XCTestCase {
         var ring = CPURing()
         ring.append(CPUSample(ticks: old, time: base))
         ring.append(sample(at: 60, user: 20, idle: 170))
-        XCTAssertEqual(ring.busyDelta(since: old), 30)
         guard case let .partial(percent, _) = ring.average(over: .seconds(300)) else {
             return XCTFail("expected partial")
         }

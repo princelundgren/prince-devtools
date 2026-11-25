@@ -14,9 +14,10 @@ panel, in place of a menu bar app for each job.
 - **System health** as a panel of cards: memory pressure, CPU averaged over minutes, free disk
   space, and your process count against the macOS limit, each against a threshold you can change
   in Settings.
-- **When something is red**, a message names the problem and the process most responsible, with an
-  **Open Activity Monitor** button.
-- **Cheap to run**: no idle CPU, about one timer wakeup a minute while the panel is closed, low RAM.
+- **When something is red**, a message names the problem and, where a process is behind it, the
+  process most responsible, with an **Open Activity Monitor** button.
+- **Cheap to run**: no idle CPU, about one wakeup a minute until the panel is first opened, low
+  RAM.
 - **Private**: no telemetry, analytics or crash reporting.
 
 Later tools join the same panel, one at a time, each one you glance at or act on with one click.

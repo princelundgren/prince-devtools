@@ -3,7 +3,7 @@ import Observation
 import PanelKit
 import SystemHealth
 
-/// The menu bar item: a template symbol, or a red attention symbol while the panel has a message,
+/// The menu bar item: a template symbol, or a red attention symbol while the monitor has a message,
 /// updated whenever the label changes. A click toggles the panel.
 @MainActor
 final class StatusItemController: NSObject {

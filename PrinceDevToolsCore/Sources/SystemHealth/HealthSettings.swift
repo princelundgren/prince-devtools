@@ -4,20 +4,30 @@ import Foundation
 public struct HealthSettings: Equatable, Sendable {
     /// The pressure level at which memory turns red: `.warning` or `.critical`, never `.normal`.
     public var memoryRedLevel: MemoryLevel
+    /// The whole-machine CPU share, in percent, above which CPU turns red.
     public var cpuPercent: Int
+    /// The minutes the CPU average covers.
     public var cpuWindowMinutes: Int
+    /// The free space, in gigabytes, below which disk turns red.
     public var diskFreeGB: Int
+    /// The share of the per-user process limit, in percent, above which processes turn red.
     public var processSharePercent: Int
 
+    /// The thresholds a fresh install starts with.
     public static let defaults = HealthSettings(
         memoryRedLevel: .critical, cpuPercent: 80, cpuWindowMinutes: 5,
         diskFreeGB: 30, processSharePercent: 80)
 
+    /// The accepted values of ``cpuPercent``.
     public static let cpuPercentRange = 50...100
+    /// The accepted values of ``cpuWindowMinutes``.
     public static let cpuWindowRange = 3...15
+    /// The accepted values of ``diskFreeGB``.
     public static let diskFreeRange = 5...500
+    /// The accepted values of ``processSharePercent``.
     public static let processShareRange = 50...95
 
+    /// ``cpuWindowMinutes`` as a duration.
     public var cpuWindow: Duration { .seconds(cpuWindowMinutes * 60) }
 
     public init(memoryRedLevel: MemoryLevel, cpuPercent: Int, cpuWindowMinutes: Int,
@@ -29,8 +39,9 @@ public struct HealthSettings: Equatable, Sendable {
         self.processSharePercent = processSharePercent
     }
 
-    /// Reads every threshold from `defaults`. A missing or non-integer value becomes the default and
-    /// an integer outside its range is clamped, so a bad stored value never disables a check.
+    /// Reads every threshold from `defaults`. A missing value, or one that is not a whole number,
+    /// becomes the default; a whole number outside its range is clamped (a Bool reads as 0 or 1).
+    /// A bad stored value never disables a check.
     public init(reading defaults: UserDefaults) {
         let fallback = Self.defaults
         let storedLevel = defaults.object(forKey: Key.memoryRedLevel) as? Int

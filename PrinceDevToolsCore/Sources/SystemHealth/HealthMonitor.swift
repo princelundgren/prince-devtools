@@ -3,7 +3,7 @@ import Observation
 
 /// Keeps ``readings``, ``status`` and ``culprits`` current, cheaply: one 60 s timer, a 2 s one only
 /// while the panel is open, the memory-pressure and thermal events, and a process scan only when a
-/// message appears or the panel opens.
+/// message appears or the panel opens on one.
 ///
 /// Call ``start()`` once, and ``stop()`` before releasing the monitor; the app forwards the
 /// system's sleep and wake and the panel's opening and closing.
@@ -100,11 +100,14 @@ public final class HealthMonitor {
         if isPanelOpen { armPanelTickTimer() }
     }
 
-    /// Arms the 2 s timer and looks for the culprit of every message shown.
+    /// Reads the polled metrics at once, so the panel opens on current values, arms the 2 s timer and
+    /// looks for the culprit of every message shown.
     public func panelOpened() {
         isPanelOpen = true
+        let shownBefore = status.messages.map(\.cause)
+        panelTick()
         armPanelTickTimer()
-        for message in status.messages { startCulpritSearch(for: message.cause) }
+        for cause in shownBefore where isShown(cause) { startCulpritSearch(for: cause) }
     }
 
     /// Stops the 2 s timer; a culprit search still running is discarded.

@@ -8,6 +8,7 @@ public enum PanelTone: Sendable {
     case yellow
     case red
 
+    /// The SF Symbol that marks this tone.
     public var symbolName: String {
         switch self {
         case .notKnown: "circle.dashed"
@@ -17,6 +18,7 @@ public enum PanelTone: Sendable {
         }
     }
 
+    /// The tone's colour, from the module's asset catalog; `.secondary` for ``notKnown``.
     public var color: Color {
         switch self {
         case .notKnown: .secondary

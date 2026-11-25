@@ -41,6 +41,7 @@ struct SettingsView: View {
             List(SettingsPane.allCases, selection: paneSelection) { pane in
                 Label(pane.title, systemImage: pane.symbolName)
             }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 180)
         } detail: {
             switch pane {
             case .systemHealth: SystemHealthSettingsPane(monitor: monitor)

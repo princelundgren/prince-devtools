@@ -10,7 +10,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "SystemHealth", swiftSettings: [.swiftLanguageMode(.v6)]),
-        .target(name: "PanelKit", swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(
+            name: "PanelKit",
+            resources: [.process("Resources")],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "SystemHealthTests", dependencies: ["SystemHealth"]),
         .testTarget(name: "PanelKitTests", dependencies: ["PanelKit"])
     ]

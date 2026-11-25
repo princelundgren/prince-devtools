@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     /// While the panel is shown: closes it on a click in another app, the desktop or another menu
     /// bar item.
     private var outsideClickMonitor: Any?
-    private var sleepAndWakeObservers: [NotificationCenter.ObservationToken] = []
+    private var systemPowerObserver: SystemPowerObserver?
 
     override init() {
         monitor = HealthMonitor()
@@ -41,11 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func observeSleepAndWake() {
-        let center = NSWorkspace.shared.notificationCenter
-        sleepAndWakeObservers = [
-            center.addObserver(of: NSWorkspace.self, for: .willSleep) { [weak self] _ in self?.monitor.sleep() },
-            center.addObserver(of: NSWorkspace.self, for: .didWake) { [weak self] _ in self?.monitor.wake() },
-        ]
+        let observer = SystemPowerObserver(
+            willSleep: { [weak self] in self?.monitor.sleep() },
+            didWake: { [weak self] in self?.monitor.wake() })
+        observer.start()
+        systemPowerObserver = observer
     }
 
     /// The menu bar an `LSUIElement` app never shows, there so its key equivalents work while the

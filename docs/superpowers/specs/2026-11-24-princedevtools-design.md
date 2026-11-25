@@ -252,7 +252,8 @@ share 50 to 95 %. A change is evaluated at once, not at the next tick.
 Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
 
 - **Event-driven first.** Memory pressure and thermal state arrive as system events. Sleep and
-  wake come from `NSWorkspace.shared.notificationCenter`; sleep pauses the timer, wake takes every
+  wake come from IOKit's `IORegisterForSystemPower`, not `NSWorkspace` (its observers drew AppKit's
+  power-queue deliveries, extra wakeups while idle); sleep pauses the timer, wake takes every
   reading at once and re-arms it.
 - **At launch and wake,** every card is read once at once, then the timer is armed.
 - **One timer for the rest:** every 60 s with about 10 s tolerance, so the system can coalesce it,

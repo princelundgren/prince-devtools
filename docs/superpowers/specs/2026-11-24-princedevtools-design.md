@@ -173,7 +173,7 @@ single app must not become overwhelming (owner).
 | Memory | Apple's memory pressure; swap used as the second line | `kern.memorystatus_vm_pressure_level`, read when an event below arrives and on the 60 s tick; `DispatchSource.makeMemoryPressureSource` as the trigger; swap from `sysctlbyname("vm.swapusage")` → `xsw_usage.xsu_used` (bytes) | pressure is critical (owner: fine unless at max) |
 | CPU | average CPU % over the window, all cores | cumulative ticks from `host_statistics(HOST_CPU_LOAD_INFO)` | average over 5 min above 80 % |
 | Disk | real free space on the startup volume | `statfs("/")`: `f_bavail × f_bsize` | below 30 GB (owner: red when close to 30 GB) |
-| Processes | the user's processes against the per-user limit | `proc_listpids(PROC_RUID_ONLY, getuid())`; limit `getrlimit(RLIMIT_NPROC)` soft limit, by default equal to `kern.maxprocperuid` | above 80 % of the limit |
+| Processes | the user's processes against the per-user limit | `proc_listpids(PROC_RUID_ONLY, getuid())`; limit the smaller of the `getrlimit(RLIMIT_NPROC)` soft limit and `kern.maxprocperuid`, a soft limit of 0 or unlimited deferring to the latter | above 80 % of the limit |
 
 - **Memory level** (owner, 2026-11-24): the app reads `kern.memorystatus_vm_pressure_level` at
   launch, after each wake, whenever the dispatch source fires, and on the 60 s tick, and the

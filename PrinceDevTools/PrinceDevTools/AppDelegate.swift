@@ -138,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
-            let hosting = NSHostingController(rootView: SettingsView())
+            let hosting = NSHostingController(rootView: SettingsView(monitor: monitor, updater: updater))
             // Only the minimum, so the window stays resizable and zoomable above it.
             hosting.sizingOptions = .minSize
             let window = NSWindow(contentViewController: hosting)

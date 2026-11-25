@@ -94,9 +94,10 @@ final class HealthEvaluatorTests: XCTestCase {
 
     func testThermal() {
         var evaluator = HealthEvaluator()
-        for level in [ThermalLevel.serious, .critical] {
+        let expected: [(ThermalLevel, ThermalWarning)] = [(.serious, .serious), (.critical, .critical)]
+        for (level, warning) in expected {
             let status = evaluator.evaluate(HealthReadings(thermal: level), settings: settings)
-            XCTAssertEqual(status.messages, [.thermal(level)])
+            XCTAssertEqual(status.messages, [.thermal(warning)])
             XCTAssertEqual(status.memory, .notKnown)
             XCTAssertEqual(status.cpu, .notKnown)
             XCTAssertEqual(status.disk, .notKnown)

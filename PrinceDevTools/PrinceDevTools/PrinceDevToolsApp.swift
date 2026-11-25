@@ -1,8 +1,5 @@
 import AppKit
 
-@MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {}
-
 @main
 @MainActor
 enum PrinceDevToolsApp {

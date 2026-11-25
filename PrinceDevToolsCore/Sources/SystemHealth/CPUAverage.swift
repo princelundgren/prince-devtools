@@ -81,9 +81,4 @@ public struct CPURing: Sendable {
         let span = newest.time - start.time
         return fullStart == nil ? .partial(percent: percent, span: span) : .full(percent: percent, span: span)
     }
-
-    /// Busy ticks (user + system + nice) between `since` and the newest sample, wrap-safe; 0 when empty.
-    public func busyDelta(since ticks: CPUTicks) -> UInt64 {
-        samples.last?.ticks.busyAndTotal(since: ticks).busy ?? 0
-    }
 }

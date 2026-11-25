@@ -1,5 +1,6 @@
 /// Where ``HealthMonitor`` gets its readings, its clock and its pause, so tests can supply their own.
-/// The read closures follow ``SystemReader``'s contract: cheap, non-blocking, `nil` when unreadable.
+/// The read closures follow ``SystemReader``'s contract: non-blocking, `nil` when unreadable, except
+/// thermal, which always reads a level, and the process scan, which returns an empty list.
 public struct HealthSource: Sendable {
     public var memoryLevel: @Sendable () -> MemoryLevel?
     public var swapUsedBytes: @Sendable () -> UInt64?
@@ -10,9 +11,11 @@ public struct HealthSource: Sendable {
     public var thermalLevel: @Sendable () -> ThermalLevel
     /// The one read that walks every process, so callers keep it off the main actor.
     public var processUsages: @Sendable () -> [ProcessUsage]
+    /// The clock the CPU samples and culprit searches are timed on.
     public var now: @Sendable () -> ContinuousClock.Instant
     /// Waits about `duration`; returns early if the calling task is cancelled.
     public var pause: @Sendable (Duration) async -> Void
+    /// Converts ``ProcessUsage/cpuTime`` to nanoseconds.
     public var timebase: MachTimebase
     /// The unit of ``CPUTicks``.
     public var ticksPerSecond: Int

@@ -18,8 +18,9 @@ public func processUsages(pids: [pid_t], read: (pid_t) -> Result<ProcessUsage, E
     pids.compactMap { try? read($0).get() }
 }
 
-/// Reads the machine's health figures from the kernel. Every function is cheap, never blocks and
-/// never traps; one that cannot read its figure returns `nil` (or an empty list).
+/// Reads the machine's health figures from the kernel. No function blocks or traps, and all but
+/// ``processUsages()``, which walks every process, are a few syscalls. One that cannot read its
+/// figure returns `nil` (or an empty list); ``thermalLevel()`` always returns a level.
 public enum SystemReader {
     /// Kernel clock ticks per second, the unit of ``CPUTicks``.
     public static let ticksPerSecond = Int(sysconf(_SC_CLK_TCK))

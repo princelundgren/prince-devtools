@@ -23,12 +23,17 @@ public enum ThermalWarning: Sendable, Equatable {
 /// One reading of every metric; `nil` or `.notKnown` means not read yet or not readable. Thermal has no
 /// unknown state and defaults to `.normal`.
 public struct HealthReadings: Equatable, Sendable {
+    /// The kernel's memory pressure level.
     public var memory: MemoryLevel?
     /// Shown as the memory card's second line; the evaluator does not read it.
     public var swapUsedBytes: UInt64?
+    /// The CPU busy share over the user's window.
     public var cpu: CPUAverage
+    /// Free space on the startup volume, in bytes.
     public var diskFreeBytes: UInt64?
+    /// How many processes the user is running.
     public var processCount: Int?
+    /// The per-user process limit the count is measured against.
     public var processLimit: Int?
     public var thermal: ThermalLevel
 
@@ -45,6 +50,7 @@ public struct HealthReadings: Equatable, Sendable {
     }
 }
 
+/// How a card is drawn: not read yet, fine, worth a look, or past its threshold.
 public enum CardState: Sendable, Equatable {
     case notKnown, green, yellow, red
 }
@@ -83,6 +89,7 @@ public enum HealthMessage: Equatable, Sendable {
     }
 }
 
+/// What the panel shows: a state for each card, and the messages for the problems.
 public struct HealthStatus: Equatable, Sendable {
     public var memory: CardState
     public var cpu: CardState
@@ -121,6 +128,8 @@ public struct HealthEvaluator: Sendable {
 
     public init() {}
 
+    /// The status for `readings` under `settings`; it updates the red flags that give CPU, disk and
+    /// processes their margin.
     public mutating func evaluate(_ readings: HealthReadings, settings: HealthSettings) -> HealthStatus {
         if let previousSettings {
             if previousSettings.cpuPercent != settings.cpuPercent

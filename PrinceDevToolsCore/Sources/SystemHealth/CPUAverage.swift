@@ -46,6 +46,7 @@ public enum CPUAverage: Equatable, Sendable {
 /// The capacity of 17 samples covers 16 one-minute intervals, enough for the 15 minute maximum
 /// window even when timer fires are late.
 public struct CPURing: Sendable {
+    /// The most samples the ring holds.
     public static let capacity = 17
 
     private var samples: [CPUSample] = []

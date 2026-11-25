@@ -2,9 +2,12 @@ import SwiftUI
 
 /// One problem in the message area; `id` names its cause.
 public struct PanelMessage: Identifiable, Equatable, Sendable {
+    /// The cause the message is about; stable while the message stays.
     public let id: String
     public let text: String
+    /// A second line under `text`, such as the process behind the problem.
     public let detail: String?
+    /// Whether the message offers the Open Activity Monitor button.
     public let opensActivityMonitor: Bool
 
     public init(id: String, text: String, detail: String?, opensActivityMonitor: Bool) {

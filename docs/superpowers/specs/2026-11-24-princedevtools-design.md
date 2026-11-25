@@ -229,6 +229,7 @@ once per panel opening.
   user finds the same number there. If the user's processes account for under half of the
   machine's busy ticks over those 2 s, the line says "Mostly system processes" instead.
 - **Processes:** the executable name with the most instances ("node × 312").
+- **Ties** go to the first name in sort order, so repeated scans show the same process.
 - **Names** come from the last component of `proc_pidpath`, not `proc_name`, which cuts names at
   32 characters.
 - **Disk:** no culprit and no button; the message says how much is free. macOS documents no way

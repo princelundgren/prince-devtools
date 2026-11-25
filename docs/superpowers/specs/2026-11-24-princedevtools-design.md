@@ -192,9 +192,10 @@ single app must not become overwhelming (owner).
 - **CPU average:** the counters are machine-wide totals over all cores, 32-bit, and wrap after
   weeks of uptime (about 41 days on 12 cores), so each field's delta is `new &- old` on `UInt32`.
   Each sample stores a monotonic timestamp (`ContinuousClock`). The average uses the newest sample
-  at least one window old and divides by the real span, so a late or skipped timer fire doesn't
-  skew it. The ring holds 17 samples, enough for the longest window even when every fire is up
-  to its 10 s tolerance late (16 gaps span at least 950 s), so a window change applies at once.
+  at least one window old and divides by the ticks elapsed between the two samples, which track the
+  real span, so a late or skipped timer fire doesn't skew it. The ring holds 17 samples, enough for
+  the longest window even when every fire is up to its 10 s tolerance late (16 gaps span at least
+  950 s), so a window change applies at once.
 - **CPU before the window fills:** "Not known yet" until two samples exist, then "avg N min" with
   the real span, never red until the span covers the whole window. After a wake the samples are
   dropped, and with them any CPU message.

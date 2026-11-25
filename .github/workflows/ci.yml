@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo xcode-select -s /Applications/Xcode_27.2.app
+      - name: Test the core package
+        run: swift test --package-path PrinceDevToolsCore
+      - run: scripts/install-xcodegen.sh >> "$GITHUB_PATH"
+      - name: Generate the project
+        working-directory: PrinceDevTools
+        run: xcodegen generate
+      - name: Build the app
+        working-directory: PrinceDevTools
+        run: >-
+          xcodebuild -scheme PrinceDevTools -configuration Debug
+          -derivedDataPath ../build/DerivedData CODE_SIGNING_ALLOWED=NO build

@@ -15,6 +15,11 @@ public enum ThermalLevel: Sendable, Equatable {
     }
 }
 
+/// The thermal levels that raise a message.
+public enum ThermalWarning: Sendable, Equatable {
+    case serious, critical
+}
+
 /// One reading of every metric; `nil` or `.notKnown` means not read yet or not readable. Thermal has no
 /// unknown state and defaults to `.normal`.
 public struct HealthReadings: Equatable, Sendable {
@@ -60,7 +65,7 @@ public enum HealthMessage: Equatable, Sendable {
     case processes(count: Int, limit: Int)
     /// `windowMinutes` is the user's setting, not the span the average actually covered.
     case cpu(percent: Double, windowMinutes: Int)
-    case thermal(ThermalLevel)
+    case thermal(ThermalWarning)
 
     public var cause: HealthCause {
         switch self {
@@ -133,7 +138,11 @@ public struct HealthEvaluator: Sendable {
             messages.append(.processes(count: count, limit: limit))
         }
 
-        if readings.thermal != .normal { messages.append(.thermal(readings.thermal)) }
+        switch readings.thermal {
+        case .normal: break
+        case .serious: messages.append(.thermal(.serious))
+        case .critical: messages.append(.thermal(.critical))
+        }
 
         return HealthStatus(memory: memory, cpu: cpu, disk: disk, processes: processes,
                             messages: messages.sorted { $0.cause < $1.cause })

@@ -1,0 +1,17 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+    name: "PrinceDevToolsCore",
+    platforms: [.macOS(.v26)],
+    products: [
+        .library(name: "SystemHealth", targets: ["SystemHealth"]),
+        .library(name: "PanelKit", targets: ["PanelKit"])
+    ],
+    targets: [
+        .target(name: "SystemHealth", swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "PanelKit", swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(name: "SystemHealthTests", dependencies: ["SystemHealth"]),
+        .testTarget(name: "PanelKitTests", dependencies: ["PanelKit"])
+    ]
+)

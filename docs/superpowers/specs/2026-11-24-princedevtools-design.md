@@ -1,5 +1,10 @@
 ---
-status: approved
+status: building
+verified: 2026-11-25
+governs:
+  - PrinceDevTools/**
+  - PrinceDevToolsCore/**
+  - .github/workflows/release.yml
 ---
 
 # PrinceDevTools: design

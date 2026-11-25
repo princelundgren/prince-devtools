@@ -1,0 +1,37 @@
+name: PrinceDevTools
+options:
+  bundleIdPrefix: com.princelundgren
+  deploymentTarget:
+    macOS: "26.0"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  PrinceDevTools:
+    type: application
+    platform: macOS
+    sources:
+      - path: PrinceDevTools
+    settings:
+      base:
+        INFOPLIST_FILE: PrinceDevTools/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.princelundgren.princedevtools
+    dependencies:
+      - package: PrinceDevToolsCore
+        products: [SystemHealth, PanelKit]
+      - package: Sparkle
+packages:
+  PrinceDevToolsCore:
+    path: ../PrinceDevToolsCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    # 2.10.1, pinned by commit since a tag can move.
+    revision: ab7d71291238df6e0492143b120c9b696a35f603

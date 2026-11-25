@@ -84,7 +84,8 @@ single app must not become overwhelming (owner).
 - `princelundgren/prince-devtools`, public, MIT, laid out as prince-clockin:
   `PrinceDevTools/project.yml` (XcodeGen) and `PrinceDevToolsCore/` (SwiftPM).
 - `PrinceDevToolsCore` targets: `SystemHealth` (readings, averaging, threshold evaluation, no
-  AppKit), `PanelKit` (the card, message and footer views shared by every tool). Tests per target.
+  AppKit), `PanelKit` (the tones, the card, message and footer views and the menu bar label shared
+  by every tool). Tests per target.
 - CI, CodeQL, the Claude review workflow, Dependabot and `release.yml` adapted from
   prince-clockin. CI and the release's test job run on GitHub-hosted macOS runners, as
   prince-sleepless decided for a public repo.

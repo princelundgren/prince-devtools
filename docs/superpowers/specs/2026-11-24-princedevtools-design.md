@@ -85,7 +85,7 @@ single app must not become overwhelming (owner).
   `PrinceDevTools/project.yml` (XcodeGen) and `PrinceDevToolsCore/` (SwiftPM).
 - `PrinceDevToolsCore` targets: `SystemHealth` (readings, averaging, threshold evaluation, no
   AppKit), `PanelKit` (the tones, the card, message and footer views and the menu bar label shared
-  by every tool). Tests per target.
+  by every tool, and the Settings text for launch at login and the version). Tests per target.
 - CI, CodeQL, the Claude review workflow, Dependabot and `release.yml` adapted from
   prince-clockin. CI and the release's test job run on GitHub-hosted macOS runners, as
   prince-sleepless decided for a public repo.
@@ -161,7 +161,7 @@ single app must not become overwhelming (owner).
   sits where prince-clockin puts it.
 - **Settings in a window**, not inside the popover: thresholds for several tools won't fit a
   popover. A sidebar pane per tool, plus General (launch at login through `SMAppService.mainApp`,
-  off by default) and About (Check for Updates).
+  off by default) and About (the version and Check for Updates).
 - **Units:** disk in decimal GB as Finder counts (`ByteCountFormatStyle` `.file`), memory and swap in
   `.memory` style, each formatted for the user's locale.
 

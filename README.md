@@ -1,5 +1,6 @@
 # PrinceDevTools
 
+[![CI](https://github.com/princelundgren/prince-devtools/actions/workflows/ci.yml/badge.svg)](https://github.com/princelundgren/prince-devtools/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A macOS menu bar app that gathers a developer's everyday status and one-click actions in one

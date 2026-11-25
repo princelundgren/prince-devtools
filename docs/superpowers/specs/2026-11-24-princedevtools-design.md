@@ -289,6 +289,10 @@ Measured by the maintainer at the keyboard, since `powermetrics` needs root:
 
 A measurement past its budget blocks the release.
 
+Idle wakeups on macOS 27.2.1, 2026-11-25: 1.5 a minute by this method and 1.22 over the next 30
+minutes, which the owner counts as within "about 1". `powermetrics` reads Intr to 0.01 a second,
+so the 60 s tick alone shows as 1.2 a minute.
+
 ## Testing
 
 - **`SystemHealth` unit tests** with fake readings: the CPU average across a counter wrap, with

@@ -147,6 +147,8 @@ single app must not become overwhelming (owner).
   keeps the area from reshuffling. **One Open Activity Monitor button** at the foot of the area,
   shown while any memory, CPU, process or thermal message is present. A message disappears when its
   cause ends.
+- **Message wording** for the lines the mockup doesn't show: disk "28 GB free on the startup
+  disk", processes "3,300 of 4,000 processes in use".
 - **Cards** in a two-column grid; each has a title, a status symbol and one or two lines. States:
   green, red, memory's yellow, and **"Not known yet"** (neutral, never green or red) until a card
   has its first reading. Each state has its own symbol, never colour alone; colours use

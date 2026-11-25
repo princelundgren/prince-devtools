@@ -1,0 +1,307 @@
+# Never rename this file: the build number is github.run_number, which belongs to this workflow
+# file, and Sparkle offers an update only when the build number has grown.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# One group for every tag, so only one release runs at a time and two can't race to write the
+# appcast. A run still waiting for the group is cancelled when a newer tag's run joins it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: test
+    runs-on: xcode-27
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ github.ref_name }}
+      APP: build/PrinceDevTools.app
+      RELEASE_DIR: build/release
+      UPDATE_URL_PREFIX: https://updates.princelundgren.com/princedevtools/
+    steps:
+      - name: Check the tag
+        run: |
+          tag_format='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
+          if [[ ! "$TAG" =~ $tag_format ]]; then
+            echo "::error::Tag $TAG isn't vMAJOR.MINOR.PATCH with an optional -suffix"
+            exit 1
+          fi
+          version="${TAG#v}"
+          {
+            echo "VERSION=$version"
+            echo "MARKETING_VERSION=${version%%-*}"
+            if [[ "$version" == *-* ]]; then echo "REHEARSAL=true"; else echo "REHEARSAL=false"; fi
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$TAG points at $GITHUB_SHA, which isn't on main"
+            exit 1
+          fi
+
+      # Sparkle compares only the build number, the run number, so an older tag pushed late would
+      # still reach every user as an update.
+      - name: Check the tag is the highest release
+        if: env.REHEARSAL == 'false'
+        run: |
+          highest="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [[ "$TAG" != "$highest" ]]; then
+            echo "::error::$TAG isn't the highest release tag, $highest is; tag a version above it"
+            exit 1
+          fi
+
+      - name: Check the release secrets are set
+        env:
+          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          UPDATE_BUCKET: ${{ secrets.UPDATE_BUCKET }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          missing=()
+          for name in CODESIGN_CERT_BASE64 CODESIGN_CERT_PASSWORD APPLE_TEAM_ID ASC_API_KEY_BASE64 \
+              ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID SPARKLE_EDDSA_PRIVATE_KEY AWS_ROLE_ARN UPDATE_BUCKET \
+              AWS_REGION; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::The release environment lacks: ${missing[*]}"
+            exit 1
+          fi
+
+      - run: sudo xcode-select -s /Applications/Xcode_27.2.app
+      - run: scripts/install-xcodegen.sh >> "$GITHUB_PATH"
+      - name: Generate the project
+        working-directory: PrinceDevTools
+        run: xcodegen generate
+
+      - name: Import the Developer ID certificate into a temporary keychain
+        env:
+          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          certificate="$RUNNER_TEMP/certificate.p12"
+          keychain_password="$(openssl rand -base64 32)"
+          echo "::add-mask::$keychain_password"
+          trap 'rm -f "$certificate"' EXIT
+          printf '%s' "$CODESIGN_CERT_BASE64" | base64 --decode -o "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -P "$CODESIGN_CERT_PASSWORD" -f pkcs12 -k "$keychain" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk '/"Developer ID Application: / { print $2; exit }')"
+          if [[ -z "$identity" ]]; then
+            echo "::error::The certificate holds no Developer ID Application identity"
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Archive
+        working-directory: PrinceDevTools
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: >-
+          xcodebuild archive -scheme PrinceDevTools -configuration Release
+          -destination 'generic/platform=macOS'
+          -derivedDataPath ../build/DerivedData -archivePath ../build/PrinceDevTools.xcarchive
+          MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+          DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY="Developer ID Application" OTHER_CODE_SIGN_FLAGS=--timestamp
+
+      - name: Check the shipped notices match the Sparkle release
+        run: |
+          if ! cmp -s PrinceDevTools/PrinceDevTools/ThirdPartyNotices.txt build/DerivedData/SourcePackages/checkouts/Sparkle/LICENSE; then
+            echo "::error::ThirdPartyNotices.txt differs from the pinned Sparkle's LICENSE; copy it over"
+            exit 1
+          fi
+
+      # No exportArchive: the archive is already signed with Developer ID, and the export step
+      # adds only opaque "method" errors.
+      - name: Re-sign without Sparkle's XPC services
+        run: |
+          ditto build/PrinceDevTools.xcarchive/Products/Applications/PrinceDevTools.app "$APP"
+          sparkle="$APP/Contents/Frameworks/Sparkle.framework"
+          # Used only by sandboxed apps; Sparkle's docs allow removing them.
+          rm -rf "$sparkle/Versions/B/XPCServices" "$sparkle/XPCServices"
+          sign() { codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$@"; }
+          sign "$sparkle/Versions/B/Autoupdate"
+          sign "$sparkle/Versions/B/Updater.app"
+          sign "$sparkle"
+          sign --preserve-metadata=entitlements "$APP"
+
+      - name: Check the signature, hardened runtime and that there are no entitlements
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          details="$(codesign -d --verbose=2 "$APP" 2>&1)"
+          if ! grep -Eq '^CodeDirectory .*flags=0x[0-9a-f]+\(([a-z-]+,)*runtime[,)]' <<< "$details"; then
+            echo "::error::The hardened runtime isn't on"
+            exit 1
+          fi
+          entitlements="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null)"
+          if [[ "$entitlements" == *"<key>"* ]]; then echo "::error::The signed app carries entitlements"; exit 1; fi
+
+      - name: Build, sign and notarize the DMG
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: |
+          dmg="$(scripts/make-dmg.sh "$APP" "$VERSION" "$RELEASE_DIR")"
+          codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
+          api_key="$RUNNER_TEMP/AuthKey.p8"
+          trap 'rm -f "$api_key"' EXIT
+          printf '%s' "$ASC_API_KEY_BASE64" | base64 --decode -o "$api_key"
+          chmod 600 "$api_key"
+          result="$(xcrun notarytool submit "$dmg" --key "$api_key" --key-id "$ASC_API_KEY_ID" \
+            --issuer "$ASC_API_KEY_ISSUER_ID" --wait --timeout 30m --output-format json)" || true
+          status="$(jq -r '.status // empty' <<< "$result" 2> /dev/null || true)"
+          if [[ "$status" != "Accepted" ]]; then
+            echo "::error::Notarization ended as $status"
+            echo "$result"
+            submission="$(jq -r '.id // empty' <<< "$result" 2> /dev/null || true)"
+            if [[ -n "$submission" ]]; then
+              xcrun notarytool log "$submission" --key "$api_key" --key-id "$ASC_API_KEY_ID" \
+                --issuer "$ASC_API_KEY_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
+          xcrun stapler staple "$dmg"
+          assessment="$(spctl -a -vv -t install "$dmg" 2>&1)" || true
+          echo "$assessment"
+          if ! grep -q ': accepted$' <<< "$assessment" || ! grep -q '^source=Notarized Developer ID$' <<< "$assessment"; then
+            echo "::error::Gatekeeper doesn't accept the DMG as notarized Developer ID"
+            exit 1
+          fi
+
+      # The feed lists only this release, which is all Sparkle needs to update anyone.
+      # generate_appcast signs the feed because the app sets SURequireSignedFeed.
+      - name: Generate the appcast
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          sparkle_bin=build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin
+          printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
+            | "$sparkle_bin/generate_appcast" \
+              --ed-key-file - --maximum-deltas 0 --download-url-prefix "$UPDATE_URL_PREFIX" "$RELEASE_DIR"
+          # generate_appcast leaves out the DMG's signature, with only a warning, if the key isn't the app's.
+          if ! grep -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"; then
+            echo "::error::appcast.xml has no sparkle:edSignature"
+            exit 1
+          fi
+          if ! printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" \
+              | "$sparkle_bin/sign_update" --verify --ed-key-file - "$RELEASE_DIR/appcast.xml"; then
+            echo "::error::appcast.xml has no valid feed signature, which the app requires"
+            exit 1
+          fi
+          cat "$RELEASE_DIR/appcast.xml"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            ${{ env.RELEASE_DIR }}/PrinceDevTools-${{ env.VERSION }}.dmg
+            ${{ env.RELEASE_DIR }}/appcast.xml
+          if-no-files-found: error
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # Single put-object calls: the role may only s3:PutObject, with no read or list. The DMG goes
+      # first and only if absent, the appcast last, so the feed never names a file that isn't there.
+      # A rehearsal's appcast names a DMG it doesn't upload, which is harmless since no app reads it.
+      - name: Upload to the update host
+        env:
+          UPDATE_BUCKET: ${{ secrets.UPDATE_BUCKET }}
+        run: |
+          put() {
+            local key="$1" file="$2" content_type="$3" cache_control="$4"
+            shift 4
+            local attempt error
+            for attempt in 1 2 3 4; do
+              if error="$(aws s3api put-object --bucket "$UPDATE_BUCKET" --key "$key" --body "$file" \
+                  --content-type "$content_type" --cache-control "$cache_control" "$@" 2>&1 > /dev/null)"; then
+                return 0
+              fi
+              case "$error" in
+                *ConditionalRequestConflict*) echo "Upload of $key conflicted (attempt $attempt)"; (( attempt == 4 )) || sleep $((attempt * 5)) ;;
+                *PreconditionFailed*) echo "::error::$(basename "$key") is already published; tag a new version"; return 1 ;;
+                *) echo "::error::Upload of $key failed: ${error//$'\n'/ }"; return 1 ;;
+              esac
+            done
+            echo "::error::Upload of $key still conflicted after 3 retries"
+            return 1
+          }
+          appcast="$RELEASE_DIR/appcast.xml"
+          if [[ "$REHEARSAL" == "true" ]]; then
+            put princedevtools/rehearsal/appcast.xml "$appcast" application/xml "public, max-age=300"
+            exit 0
+          fi
+          dmg_name="PrinceDevTools-$VERSION.dmg"
+          put "princedevtools/$dmg_name" "$RELEASE_DIR/$dmg_name" application/x-apple-diskimage \
+            "public, max-age=31536000, immutable" --if-none-match '*'
+          put princedevtools/appcast.xml "$appcast" application/xml "public, max-age=300"
+
+      - name: Delete the signing keychain
+        if: always() && env.SIGNING_KEYCHAIN != ''
+        run: security delete-keychain "$SIGNING_KEYCHAIN"
+
+  # Its own job, so it can be re-run alone without rebuilding or re-uploading anything.
+  github-release:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Publish the DMG on the GitHub release
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/*.dmg --clobber
+          else
+            gh release create "$TAG" release/*.dmg --verify-tag --title "PrinceDevTools ${TAG#v}" --generate-notes
+          fi

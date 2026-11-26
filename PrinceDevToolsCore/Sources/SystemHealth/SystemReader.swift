@@ -119,7 +119,8 @@ public enum SystemReader {
         }
     }
 
-    private static func ownPIDs() -> [pid_t]? {
+    /// The pids of this user's processes, or `nil` when the list can't be read.
+    public static func ownPIDs() -> [pid_t]? {
         let uid = getuid()
         let wanted = proc_listpids(UInt32(PROC_RUID_ONLY), uid, nil, 0)
         guard wanted > 0 else { return nil }

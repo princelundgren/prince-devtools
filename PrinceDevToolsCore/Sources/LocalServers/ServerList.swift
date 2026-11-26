@@ -15,7 +15,32 @@ public enum ServerList {
         return rows.map { key, holders in
             server(holders[0].record, port: key.port, addresses: holders.map(\.address), source: source)
         }
-        .sorted { ($0.port, $0.pid) < ($1.port, $1.pid) }
+        .sorted(by: listOrder)
+    }
+
+    /// Parent gone first, then by port, then by pid.
+    private static func listOrder(_ first: Server, _ second: Server) -> Bool {
+        guard first.isParentGone == second.isParentGone else { return first.isParentGone }
+        return (first.port, first.pid) < (second.port, second.pid)
+    }
+
+    private static let longestChain = 64
+
+    /// Whether the process that started `process` is gone: climbing the parent chain, the first
+    /// process whose parent is launchd (pid 1) has a folder in `home`, as a wrapper the ended
+    /// session left behind does, and an app launchd starts, in `/`, doesn't. A parent `lookup`
+    /// can't read (another user's), a loop, or a chain over 64 long ends the walk as not gone.
+    static func isParentGone(
+        _ process: ProcessRecord, home: String, lookup: (pid_t) -> ProcessRecord?
+    ) -> Bool {
+        var current = process
+        var seen: Set<pid_t> = [process.pid]
+        for _ in 0..<longestChain {
+            if current.parentPID == 1 { return current.folder.isInHomeFolder(home) }
+            guard let parent = lookup(current.parentPID), seen.insert(parent.pid).inserted else { return false }
+            current = parent
+        }
+        return false
     }
 
     private struct PIDAndPort: Hashable {
@@ -46,7 +71,7 @@ public enum ServerList {
             pid: record.pid, name: source.processName(record.pid), port: port,
             addresses: Set(addresses).sorted(), folderPath: folderPath,
             isFolderGone: isFolderGone(record.folder, check: source.checkFolder), startTime: record.startTime,
-            isParentGone: false)
+            isParentGone: isParentGone(record, home: source.homeFolder, lookup: source.process))
     }
 
     private static func isFolderGone(_ folder: FolderReading, check: (String) -> FolderCheck) -> Bool {

@@ -193,4 +193,73 @@ final class ServerListTests: XCTestCase {
         XCTAssertFalse(server.isFolderGone)
         XCTAssertEqual(server.startTime, FakeProcesses.epoch + 60)
     }
+
+    func testDirectOrphanInHomeIsParentGone() {
+        var fake = FakeProcesses()
+        fake.listen(pid: 10, port: 3000, folder: "/Users/u/app", parent: 1)
+
+        XCTAssertEqual(fake.servers.map(\.isParentGone), [true])
+    }
+
+    func testWrappedOrphanIsParentGone() {
+        var fake = FakeProcesses()
+        fake.add(pid: 40, parent: 1, folder: "/Users/u/app")
+        fake.listen(pid: 41, port: 3000, parent: 40)
+
+        XCTAssertEqual(fake.servers.map(\.isParentGone), [true])
+    }
+
+    func testChainEndingAtAnAppInRootIsNotGone() {
+        var fake = FakeProcesses()
+        fake.add(pid: 50, parent: 1, folder: "/")
+        fake.add(pid: 51, parent: 50, folder: "/Users/u")
+        fake.listen(pid: 52, port: 3000, parent: 51)
+
+        XCTAssertEqual(fake.servers.map(\.isParentGone), [false])
+    }
+
+    func testChainEndingAtAnotherUsersProcessIsNotGone() {
+        var fake = FakeProcesses()
+        fake.add(pid: 51, parent: 500, folder: "/Users/u")
+        fake.listen(pid: 52, port: 3000, parent: 51)
+
+        XCTAssertEqual(fake.servers.map(\.isParentGone), [false])
+    }
+
+    func testLoopIsNotGone() {
+        var fake = FakeProcesses()
+        fake.add(pid: 60, parent: 61, folder: "/Users/u/app")
+        fake.add(pid: 61, parent: 60, folder: "/Users/u/app")
+        fake.listen(pid: 62, port: 3000, parent: 60)
+
+        XCTAssertEqual(fake.servers.map(\.isParentGone), [false])
+    }
+
+    /// A server under `length - 1` ancestors, the top one launchd's child in the home folder.
+    private func chain(of length: Int) -> FakeProcesses {
+        var fake = FakeProcesses()
+        let top: pid_t = 100
+        fake.add(pid: top, parent: 1, folder: "/Users/u/app")
+        for pid in top + 1..<top + pid_t(length - 1) { fake.add(pid: pid, parent: pid - 1, folder: "/Users/u/app") }
+        fake.listen(pid: 1000, port: 3000, parent: top + pid_t(length - 2))
+        return fake
+    }
+
+    func testChainOf64ProcessesIsGone() {
+        XCTAssertEqual(chain(of: 64).servers.map(\.isParentGone), [true])
+    }
+
+    func testChainOf65ProcessesIsNotGone() {
+        XCTAssertEqual(chain(of: 65).servers.map(\.isParentGone), [false])
+    }
+
+    func testRowsSortParentGoneFirstThenPortThenPID() {
+        var fake = FakeProcesses()
+        fake.listen(pid: 10, port: 8000, parent: 1)
+        fake.listen(pid: 12, port: 3000)
+        fake.listen(pid: 11, port: 3000)
+        fake.listen(pid: 13, port: 9000, parent: 1)
+
+        XCTAssertEqual(fake.servers.map(\.pid), [10, 13, 11, 12])
+    }
 }

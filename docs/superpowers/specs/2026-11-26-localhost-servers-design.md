@@ -113,8 +113,8 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
     the `lstat` goes, and "folder gone" comes only from a failed read.
 - **Start time and parent:** `proc_pidinfo(PROC_PIDTBSDINFO)` → `pbi_start_tvsec` and `pbi_ppid`,
   for each server's process, then up its chain only as far as the walk climbs (see "Parent gone"),
-  not for every process. A walked process's folder is read with `PROC_PIDVNODEPATHINFO` only, no
-  `lstat`, when its parent is 1.
+  not for every process. Each walked process's folder is read with its record, by
+  `PROC_PIDVNODEPATHINFO` alone, no `lstat`; the walk uses it only when the parent is 1.
 - **Failures:** a process whose sockets or start time can't be read (it exited mid-scan) is
   skipped; a failed name read shows its pid; a failed folder read is "folder gone", as above.
 - **Cost:** one scan of 870 processes measured 5.6 ms on a 12-core Mac, 2026-11-26 (a probe; the

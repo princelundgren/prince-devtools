@@ -15,15 +15,17 @@ public struct BusyProcess: Equatable, Sendable {
 /// Follows each of the user's processes' share of one core from one scan to the next, and finds one
 /// that stayed over a threshold for a whole window.
 ///
-/// A process turns red once its intervals over the threshold, in a row, span the window; a quieter
-/// interval starts it over. It stays red until an interval falls ``clearMarginPercent`` below the
-/// threshold, or it exits. A pid whose CPU time fell is a reused pid and starts over. It keeps no
-/// names: ``busiest(over:window:name:)`` asks for the name of a red process only.
+/// A process turns red once its intervals over the threshold, in a row, span the window less
+/// ``CPURing/windowSlack``; a quieter interval starts it over. It stays red until an interval falls
+/// ``clearMarginPercent`` below the threshold, or it exits. A pid whose CPU time fell is a reused
+/// pid and starts over. It keeps no names: ``busiest(over:window:name:)`` asks for the name of a
+/// red process only.
 struct BusyProcessTracker: Sendable {
     static let clearMarginPercent = 5.0
     /// Below this share no threshold the settings allow can hold a process, so it is not kept.
     static let keptFloorPercent = Double(HealthSettings.processCPUPercentRange.lowerBound) - clearMarginPercent
-    /// The most intervals kept per process: the longest window, with room for late timer fires.
+    /// The most intervals kept per process: the longest window, and one more for a scan delayed
+    /// past ``CPURing/windowSlack``.
     static let keptIntervals = CPURing.capacity - 1
 
     private struct Interval: Sendable {
@@ -82,7 +84,7 @@ struct BusyProcessTracker: Sendable {
             guard let latest = intervals.last else { return nil }
             if redPIDs.contains(pid) && latest.percentOfCore > threshold - Self.clearMarginPercent { return pid }
             let run = intervals.reversed().prefix { $0.percentOfCore > threshold }
-            guard let first = run.last, latest.end - first.start >= window else { return nil }
+            guard let first = run.last, latest.end - first.start >= window - CPURing.windowSlack else { return nil }
             return pid
         })
 

@@ -123,8 +123,8 @@ final class HealthEvaluatorTests: XCTestCase {
             .memory,
             .disk(freeBytes: 1_000_000_000),
             .processes(count: 4000, limit: 4000),
-            .cpu(percent: 95, windowMinutes: 5),
-            .busyProcess(name: "node", percentOfCore: 98, windowMinutes: 5),
+            .cpu(percent: 95, windowMinutes: settings.cpuWindowMinutes),
+            .busyProcess(name: "node", percentOfCore: 98, windowMinutes: settings.cpuWindowMinutes),
             .thermal(.critical),
         ])
     }
@@ -134,7 +134,7 @@ final class HealthEvaluatorTests: XCTestCase {
         let busy = BusyProcess(name: "node", percentOfCore: 98)
         var status = evaluator.evaluate(HealthReadings(cpu: fullCPU(9), busyProcess: busy), settings: settings)
         XCTAssertEqual(status.cpu, .red)
-        XCTAssertEqual(status.messages, [.busyProcess(name: "node", percentOfCore: 98, windowMinutes: 5)])
+        XCTAssertEqual(status.messages, [.busyProcess(name: "node", percentOfCore: 98, windowMinutes: settings.cpuWindowMinutes)])
         XCTAssertTrue(status.messages[0].opensActivityMonitor)
 
         status = evaluator.evaluate(HealthReadings(cpu: fullCPU(9)), settings: settings)

@@ -80,6 +80,26 @@ final class CPUAverageTests: XCTestCase {
         XCTAssertEqual(span, .seconds(800))
     }
 
+    func testASpanUpToTheSlackShortOfTheWindowIsFull() {
+        var ring = CPURing()
+        ring.append(sample(at: 0))
+        ring.append(sample(at: 50, user: 30, idle: 70))
+        guard case let .full(percent, span) = ring.average(over: .seconds(60)) else {
+            return XCTFail("expected full")
+        }
+        XCTAssertEqual(percent, 30, accuracy: 0.001)
+        XCTAssertEqual(span, .seconds(50))
+    }
+
+    func testASpanMoreThanTheSlackShortOfTheWindowIsPartial() {
+        var ring = CPURing()
+        ring.append(sample(at: 0))
+        ring.append(sample(at: 49, user: 30, idle: 70))
+        guard case .partial = ring.average(over: .seconds(60)) else {
+            return XCTFail("expected partial")
+        }
+    }
+
     func testLateFiresStillFillFifteenMinutes() {
         var ring = CPURing()
         ring.append(sample(at: 10))

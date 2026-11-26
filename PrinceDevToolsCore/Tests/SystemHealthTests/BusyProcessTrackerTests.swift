@@ -89,13 +89,29 @@ final class BusyProcessTrackerTests: XCTestCase {
         XCTAssertEqual(busiest()?.percentOfCore ?? 0, 95, accuracy: 0.001)
     }
 
-    func testTwoLateScansStillFitTheLongestWindow() {
-        baseline([(1, "node")], late: .seconds(10))
-        passMinute([(1, "node", 95)], late: .seconds(10))
+    func testTwoScansDelayedPastTheSlackStillFitTheLongestWindow() {
+        baseline([(1, "node")], late: .seconds(20))
+        passMinute([(1, "node", 95)], late: .seconds(20))
         for _ in 0..<14 { passMinute([(1, "node", 95)]) }
-        XCTAssertNil(busiest(window: .seconds(900)), "15 minutes spanning 890 s")
+        XCTAssertNil(busiest(window: .seconds(900)), "15 minutes spanning 880 s")
         passMinute([(1, "node", 95)])
-        XCTAssertEqual(busiest(window: .seconds(900))?.name, "node", "16 minutes spanning 950 s")
+        XCTAssertEqual(busiest(window: .seconds(900))?.name, "node", "16 minutes spanning 940 s")
+    }
+
+    /// One interval of `seconds` with "node" at 95 % of a core, judged against a 1 minute window.
+    private func oneIntervalAgainstAMinute(lasting seconds: Int) -> BusyProcess? {
+        baseline([(1, "node")])
+        let cpuTime = UInt64(0.95 * Double(seconds) * 1_000_000_000)
+        tracker.record([1: cpuTime], at: start + .seconds(seconds), timebase: MachTimebase(numer: 1, denom: 1))
+        return busiest(window: .seconds(60))
+    }
+
+    func testAnIntervalUpToTheSlackShortOfTheWindowFillsIt() {
+        XCTAssertEqual(oneIntervalAgainstAMinute(lasting: 50)?.name, "node")
+    }
+
+    func testAnIntervalMoreThanTheSlackShortOfTheWindowDoesNot() {
+        XCTAssertNil(oneIntervalAgainstAMinute(lasting: 49))
     }
 
     func testOnlyARedProcessIsNamed() {

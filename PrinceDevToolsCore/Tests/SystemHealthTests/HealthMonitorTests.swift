@@ -139,15 +139,19 @@ private final class FakeSystem: Sendable {
 final class HealthMonitorTests: XCTestCase {
     private let gigabyte: UInt64 = 1_000_000_000
 
-    /// A monitor on `fake` with its own defaults suite, removed when the test ends.
-    private func makeMonitor(_ fake: FakeSystem) -> (HealthMonitor, UserDefaults) {
+    /// A monitor on `fake` with its own defaults suite, removed when the test ends, and a
+    /// `cpuWindowMinutes` CPU window: 5 unless a test says otherwise.
+    private func makeMonitor(_ fake: FakeSystem, cpuWindowMinutes: Int = 5) -> (HealthMonitor, UserDefaults) {
         let suiteName = "HealthMonitorTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         addTeardownBlock { UserDefaults().removePersistentDomain(forName: suiteName) }
+        var settings = HealthSettings.defaults
+        settings.cpuWindowMinutes = cpuWindowMinutes
+        settings.save(to: defaults)
         return (HealthMonitor(source: fake.source, defaults: defaults), defaults)
     }
 
-    /// Five minutes at 90 % busy after `start()`, which fills the default 5 minute window past 80 %.
+    /// Five minutes at 90 % busy after `start()`, which fills the 5 minute window past 80 %.
     private func driveCPURed(_ monitor: HealthMonitor, _ fake: FakeSystem) {
         for _ in 0..<5 {
             fake.passMinute(busy: 90, idle: 10)
@@ -367,7 +371,7 @@ final class HealthMonitorTests: XCTestCase {
         monitor.stop()
     }
 
-    /// The CPU culprit after the default five minutes at 90 %, with `busyTicks` machine ticks
+    /// The CPU culprit after five minutes at 90 %, with `busyTicks` machine ticks
     /// (100 a second) spent during the culprit's 2 s pause, in which busy-tool uses 1 s.
     private func cpuCulprit(
         busyTicksDuringPause busyTicks: UInt32
@@ -484,6 +488,31 @@ final class HealthMonitorTests: XCTestCase {
         fake.set { $0.loopCPUTime += 58_800_000_000 }
         monitor.tick()
         await monitor.busyScanFinished()
+    }
+
+    func testAOneMinuteWindowTurnsTheAverageRedAfterOneBusyMinute() {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake, cpuWindowMinutes: 1)
+        monitor.start()
+
+        fake.passMinute(busy: 90, idle: 10)
+        monitor.tick()
+
+        XCTAssertEqual(monitor.status.messages, [.cpu(percent: 90, windowMinutes: 1)])
+        monitor.stop()
+    }
+
+    func testAOneMinuteWindowTurnsABusyProcessRedAfterItsFirstWholeMinute() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake, cpuWindowMinutes: 1)
+        monitor.start()
+
+        await passLoopMinute(monitor, fake)
+        XCTAssertEqual(monitor.status.cpu, .green, "the first scan is only a baseline")
+        await passLoopMinute(monitor, fake)
+
+        XCTAssertEqual(monitor.status.messages, [.busyProcess(name: "loop", percentOfCore: 98, windowMinutes: 1)])
+        monitor.stop()
     }
 
     func testOneBusyProcessTurnsCPURedAfterAWholeWindow() async {

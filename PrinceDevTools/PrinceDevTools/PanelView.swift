@@ -7,8 +7,6 @@ import SystemHealth
 struct PanelView: View {
     private static let width: CGFloat = 320
     private static let cardSpacing: CGFloat = 8
-    private static let columns = Array(
-        repeating: GridItem(.flexible(), spacing: cardSpacing, alignment: .top), count: 2)
 
     let monitor: HealthMonitor
     let updater: Updater
@@ -19,7 +17,7 @@ struct PanelView: View {
             monitor.readings, monitor.status, windowMinutes: monitor.settings.cpuWindowMinutes, locale: .current)
         VStack(alignment: .leading, spacing: 10) {
             MessageArea(messages: panelMessages(monitor, locale: .current), openActivityMonitor: ActivityMonitor.open)
-            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Self.cardSpacing) {
+            CardGrid(spacing: Self.cardSpacing) {
                 ForEach(cards, id: \.title) { card in
                     CardView(
                         title: card.title, tone: panelTone(card.state), value: card.value, detail: card.detail,

@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// One metric's card: title, a status symbol and value, an optional detail line and an optional
-/// gauge. VoiceOver reads it as one element, `accessibilityLabel`.
+/// gauge. It fills the size it is offered, its lines at the top. VoiceOver reads it as one
+/// element, `accessibilityLabel`.
 public struct CardView: View {
     private let title: String
     private let tone: PanelTone
@@ -48,7 +49,7 @@ public struct CardView: View {
                     .tint(tone.color)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(8)
         .background(fill, in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .ignore)

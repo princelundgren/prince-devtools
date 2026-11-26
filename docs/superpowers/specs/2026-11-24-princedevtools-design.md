@@ -164,10 +164,12 @@ single app must not become overwhelming (owner).
   window (owner, 2026-11-26), so the card and its VoiceOver label say why it is red.
 - **Cards** in a two-column grid, all the same size: each as tall as the tallest, its lines at the
   top (owner, 2026-11-26). Each has a title, a status symbol and one or two lines. States:
-  green, red, memory's yellow, and **"Not known yet"** (neutral, never green or red) until a card
+  green, red, memory's yellow, **informational** (blue, neither green nor red: a card that
+  reports without judging) and **"Not known yet"** (neutral, never green or red) until a card
   has its first reading. Each state has its own symbol, never colour alone; colours use
   prince-clockin's tokens with their Increase Contrast variants. Each card is one VoiceOver
-  element naming its value and state.
+  element naming its value and state. A card that opens something on a click is a button,
+  looking as the others do, whose VoiceOver hint says what the click does.
 - **The process card** shows the count over the limit with a thin linear gauge under it (owner:
   "a meter").
 - **Footer** as the Prince popover style: Settings left, Quit right. Sparkle's "update ready" row

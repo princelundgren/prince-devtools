@@ -52,8 +52,8 @@ single app must not become overwhelming (owner).
 
 - **A monitor that costs what it monitors**: any idle CPU, a wakeup rate above the budget, RAM that
   grows over time.
-- **Crying wolf**: red on a CPU spike, on Apple's yellow memory pressure, on a partial CPU window,
-  or a message that flickers at a threshold.
+- **Crying wolf**: red on a CPU spike well under a minute, on Apple's yellow memory pressure, on a
+  partial CPU window, or a message that flickers at a threshold.
 - **A crowded panel**: text walls, many colours, controls nobody uses.
 
 ## Constraints
@@ -126,13 +126,13 @@ single app must not become overwhelming (owner).
 ┌──────────────────────────────────────┐
 │ ▲ Memory pressure is red             │  message area: only while there are messages
 │   Top of your processes: claude 4.1 GB│
-│ ▲ CPU avg 5 min is 91 %              │
+│ ▲ CPU avg 1 min is 91 %              │
 │   Top of your processes: node 340 %  │
 │              [Open Activity Monitor] │
 ├──────────────────────────────────────┤
 │ ┌─ Memory ─────────┐ ┌─ CPU ───────┐ │
 │ │ ▲ Red            │ │ ▲ 91 %      │ │
-│ │ Swap 8.3 GB      │ │ avg 5 min   │ │
+│ │ Swap 8.3 GB      │ │ avg 1 min   │ │
 │ └──────────────────┘ └─────────────┘ │
 │ ┌─ Disk ───────────┐ ┌─ Processes ─┐ │
 │ │ ● 70 GB free     │ │ ● 755/4000  │ │
@@ -151,7 +151,7 @@ single app must not become overwhelming (owner).
   present. A message disappears when its cause ends.
 - **Message wording** for the lines the mockup doesn't show: disk "28 GB free on the startup
   disk", processes "3,300 of 4,000 processes in use", a busy process "node has used 98 % of a
-  core for 5 min" (it names the process, so it needs no culprit line). A busy process and the
+  core for 1 min" (it names the process, so it needs no culprit line). A busy process and the
   whole-machine average are separate causes, so both messages can show, the whole machine first.
   When a busy process turns the CPU card red, the card keeps the whole-machine average as its
   value and names the process on its second line, "node at 98 % of a core", in place of the
@@ -178,7 +178,7 @@ single app must not become overwhelming (owner).
 | Card | Reading | Source | Red when (default) |
 |---|---|---|---|
 | Memory | Apple's memory pressure; swap used as the second line | `kern.memorystatus_vm_pressure_level`, read when an event below arrives and on the 60 s tick; `DispatchSource.makeMemoryPressureSource` as the trigger; swap from `sysctlbyname("vm.swapusage")` → `xsw_usage.xsu_used` (bytes) | pressure is critical (owner: fine unless at max) |
-| CPU | average CPU % over the window, all cores; and each of the user's processes as a share of one core | cumulative ticks from `host_statistics(HOST_CPU_LOAD_INFO)`; each process's `ri_user_time + ri_system_time` from `proc_pid_rusage` | average over 5 min above 80 %, or one of the user's processes above 90 % of a core in every minute of the window |
+| CPU | average CPU % over the window, all cores; and each of the user's processes as a share of one core | cumulative ticks from `host_statistics(HOST_CPU_LOAD_INFO)`; each process's `ri_user_time + ri_system_time` from `proc_pid_rusage` | average over 1 min above 80 %, or one of the user's processes above 90 % of a core in every minute of the window |
 | Disk | real free space on the startup volume | `statfs("/")`: `f_bavail × f_bsize` | below 30 GB (owner: red when close to 30 GB) |
 | Processes | the user's processes against the per-user limit | `proc_listpids(PROC_RUID_ONLY, getuid())`; limit the smaller of the `getrlimit(RLIMIT_NPROC)` soft limit and `kern.maxprocperuid`, a soft limit of 0 or unlimited deferring to the latter | above 80 % of the limit |
 
@@ -202,22 +202,29 @@ single app must not become overwhelming (owner).
 - **CPU average:** the counters are machine-wide totals over all cores, 32-bit, and wrap after
   weeks of uptime (about 41 days on 12 cores), so each field's delta is `new &- old` on `UInt32`.
   Each sample stores a monotonic timestamp (`ContinuousClock`). The average uses the newest sample
-  at least one window old and divides by the ticks elapsed between the two samples, which track the
-  real span, so a late or skipped timer fire doesn't skew it. The ring holds 17 samples, enough for
-  the longest window even when every fire is up to its 10 s tolerance late (16 gaps span at least
-  950 s), so a window change applies at once.
+  at least one window old, less the tick's 10 s tolerance, and divides by the ticks elapsed between
+  the two samples, which track the real span, so a late or skipped timer fire doesn't skew it. The
+  10 s of slack is there because a repeating timer keeps its schedule: a fire up to 10 s late is
+  followed by a gap up to 10 s short, which still counts as a whole minute. The ring holds 17
+  samples, so a window change applies at once: with the slack, 15 gaps fill the longest window,
+  and the 16th covers a fire or scan more than 10 s late.
 - **CPU before the window fills:** "Not known yet" until two samples exist, then "avg N min" with
-  the real span, never red until the span covers the whole window. After a wake the samples are
-  dropped, and with them any CPU message.
-- **CPU window:** 3 to 15 min, default 5. Below 3 a single burst could fill the average, which
-  the owner ruled out ("spikes are completely fine").
+  the real span, never red until the span covers the whole window, less the slack. After a wake
+  the samples are dropped, and with them any CPU message.
+- **CPU window:** 1 to 15 min, default 1 (owner, 2026-11-26), for a figure that follows the
+  Mac closely. One minute is the 60 s tick's shortest window. A burst that holds the average over
+  the threshold for a tick's gap can turn the card red, and each time the CPU message appears the
+  culprit search runs, so a build alternating busy and quiet minutes can run it each minute. A busy
+  process turns the card red about two to three minutes after it starts on an otherwise idle Mac,
+  sooner on a busy one: a busy minute opens its
+  scan, the first scan is only a baseline, and the next tick's interval fills the window.
 - **One busy process** (owner, 2026-11-26): the whole-machine average can't see a runaway
   process, since one pegged core is about 8 % of a 12-core Mac. So the CPU card also turns red when
   one of the user's processes uses more than 90 % of a core in every minute of the CPU window.
   - **Per minute, not averaged:** each 60 s tick compares each process's CPU time with the
     previous tick's, over the measured span (`ContinuousClock`). Red once a run of minutes in a
-    row over the threshold spans the window; a quieter minute starts the run over, so a burst never
-    adds up to red.
+    row over the threshold spans the window, less the same 10 s of slack; a quieter minute starts
+    the run over, so a burst never adds up to red.
   - **Clearing:** red until a minute falls 5 points below the threshold (85 % by default), the
     process exits, or sleep or wake drops what is kept. A pid whose CPU time fell is a reused pid
     and starts over.
@@ -231,9 +238,11 @@ single app must not become overwhelming (owner).
     `proc_pid_rusage` can't read root's. The scan reads only CPU time; a name is read with
     `proc_pidpath` only for a process that is red. CPU time is in Mach absolute units, converted
     with `mach_timebase_info` as for the culprit. A scan no later than the last one recorded is
-    ignored, so a scan delayed past the next tick can't count a minute twice. Kept: each pid's CPU time at the last scan, and
-    each process's last 16 minutes, so a changed threshold is judged at once against them. A minute
-    below 45 %, the clearing share of the lowest threshold Settings allows, forgets the process.
+    ignored, so a scan delayed past the next tick can't count a minute twice. Kept: each pid's CPU
+    time at the last scan, and each process's last 16 minutes, so a changed threshold is judged at
+    once against them; the 16th covers a scan delayed more than 10 s, since the scan is a
+    background task. A minute below 45 %, the clearing share of the lowest threshold Settings
+    allows, forgets the process.
 - **Hysteresis** for the polled metrics: CPU, disk and processes turn red past their threshold
   and clear only once back past it by a margin (5 CPU points, 2 GB, 5 % of the limit), so a value
   sitting at the line doesn't flicker. Changing a metric's own threshold drops its red first, so
@@ -272,7 +281,7 @@ once per panel opening. Until it is found, the message shows without its culprit
 
 The System health pane holds every threshold (owner), each with a range, clamped when read from
 `UserDefaults` as prince-sleepless does: the memory level for red (critical, or warning for a
-stricter user), CPU 50 to 100 % and its window (3 to 15 min), one process's share of a core 50 to
+stricter user), CPU 50 to 100 % and its window (1 to 15 min), one process's share of a core 50 to
 400 % (default 90 %), free disk 5 to 500 GB, the process share 50 to 95 %. A change is evaluated
 at once, not at the next tick; a new per-process threshold applies to the minutes already kept.
 
@@ -337,7 +346,8 @@ so the 60 s tick alone shows as 1.2 a minute.
 ## Testing
 
 - **`SystemHealth` unit tests** with fake readings: the CPU average across a counter wrap, with
-  uneven sample spacing, before the window fills, after wake and after a window change; the
+  uneven sample spacing, before the window fills, a span up to 10 s short of it, after wake and
+  after a window change; the
   hysteresis margins for CPU, disk and processes; the sysctl's known and unknown values; Settings
   clamping; the message order; a message clearing when its cause ends; the Mach-time conversion for
   the culprit; a busy process turning red only after a full window of minutes over the threshold,

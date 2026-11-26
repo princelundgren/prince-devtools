@@ -14,12 +14,12 @@ final class HealthSettingsTests: XCTestCase {
             let settings = HealthSettings(reading: defaults)
             XCTAssertEqual(settings.memoryRedLevel, .critical)
             XCTAssertEqual(settings.cpuPercent, 80)
-            XCTAssertEqual(settings.cpuWindowMinutes, 5)
+            XCTAssertEqual(settings.cpuWindowMinutes, 1)
             XCTAssertEqual(settings.processCPUPercent, 90)
             XCTAssertEqual(settings.diskFreeGB, 30)
             XCTAssertEqual(settings.processSharePercent, 80)
             XCTAssertEqual(settings, HealthSettings.defaults)
-            XCTAssertEqual(settings.cpuWindow, .seconds(300))
+            XCTAssertEqual(settings.cpuWindow, .seconds(60))
         }
     }
 
@@ -28,8 +28,8 @@ final class HealthSettingsTests: XCTestCase {
             ("systemHealth.cpuPercent", 10, \.cpuPercent, 50),
             ("systemHealth.cpuPercent", 101, \.cpuPercent, 100),
             ("systemHealth.cpuWindowMinutes", 99, \.cpuWindowMinutes, 15),
-            ("systemHealth.cpuWindowMinutes", 1, \.cpuWindowMinutes, 3),
-            ("systemHealth.cpuWindowMinutes", -3, \.cpuWindowMinutes, 3),
+            ("systemHealth.cpuWindowMinutes", 0, \.cpuWindowMinutes, 1),
+            ("systemHealth.cpuWindowMinutes", -3, \.cpuWindowMinutes, 1),
             ("systemHealth.processCPUPercent", 10, \.processCPUPercent, 50),
             ("systemHealth.processCPUPercent", 1000, \.processCPUPercent, 400),
             ("systemHealth.diskFreeGB", 1, \.diskFreeGB, 5),

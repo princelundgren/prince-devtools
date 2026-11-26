@@ -18,13 +18,13 @@ public struct HealthSettings: Equatable, Sendable {
 
     /// The thresholds a fresh install starts with.
     public static let defaults = HealthSettings(
-        memoryRedLevel: .critical, cpuPercent: 80, cpuWindowMinutes: 5, processCPUPercent: 90,
+        memoryRedLevel: .critical, cpuPercent: 80, cpuWindowMinutes: 1, processCPUPercent: 90,
         diskFreeGB: 30, processSharePercent: 80)
 
     /// The accepted values of ``cpuPercent``.
     public static let cpuPercentRange = 50...100
     /// The accepted values of ``cpuWindowMinutes``.
-    public static let cpuWindowRange = 3...15
+    public static let cpuWindowRange = 1...15
     /// The accepted values of ``processCPUPercent``.
     public static let processCPUPercentRange = 50...400
     /// The accepted values of ``diskFreeGB``.

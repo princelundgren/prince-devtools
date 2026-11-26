@@ -43,11 +43,15 @@ public enum CPUAverage: Equatable, Sendable {
 
 /// A fixed-capacity history of CPU samples that averages busy time over a window.
 ///
-/// The capacity of 17 samples covers 16 one-minute intervals, enough for the 15 minute maximum
-/// window even when timer fires are late.
+/// The capacity of 17 samples covers 16 one-minute intervals: with ``windowSlack``, 15 fill the
+/// 15 minute maximum window, and the 16th covers a fire more than the slack late.
 public struct CPURing: Sendable {
     /// The most samples the ring holds.
     public static let capacity = 17
+    /// How far short of a window a span may fall and still count as the whole window: the 60 s
+    /// tick's tolerance. A repeating timer keeps its schedule, so a fire up to this late is followed
+    /// by a gap this much shorter than 60 s.
+    static let windowSlack = Duration.seconds(10)
 
     private var samples: [CPUSample] = []
 
@@ -82,11 +86,11 @@ public struct CPURing: Sendable {
     ///
     /// Divides by the ticks elapsed between the samples used, which track real time, so uneven timer
     /// spacing does not skew it.
-    /// Uses the newest sample at least `window` older than the newest; when none is, the oldest sample
-    /// gives a `.partial` result.
+    /// Uses the newest sample at least `window` less ``windowSlack`` older than the newest; when none
+    /// is, the oldest sample gives a `.partial` result.
     public func average(over window: Duration) -> CPUAverage {
         guard let newest = samples.last, samples.count >= 2 else { return .notKnown }
-        let fullStart = samples.dropLast().last { newest.time - $0.time >= window }
+        let fullStart = samples.dropLast().last { newest.time - $0.time >= window - Self.windowSlack }
         guard let start = fullStart ?? samples.first else { return .notKnown }
         let (busy, total) = newest.ticks.busyAndTotal(since: start.ticks)
         guard total > 0 else { return .notKnown }

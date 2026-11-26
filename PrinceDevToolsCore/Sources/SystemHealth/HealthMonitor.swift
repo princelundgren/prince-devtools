@@ -12,7 +12,7 @@ import Observation
 @MainActor @Observable
 public final class HealthMonitor {
     private static let tickInterval: TimeInterval = 60
-    private static let tickTolerance: TimeInterval = 10
+    private static let tickTolerance: TimeInterval = CPURing.windowSlack / .seconds(1)
     private static let panelTickInterval: TimeInterval = 2
     private static let panelTickTolerance: TimeInterval = 0.2
     private static let cpuCulpritSpan = Duration.seconds(2)

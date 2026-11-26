@@ -163,7 +163,8 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 
 - **On panel open:** one scan, for the card. Nothing while the panel is closed.
 - **While the list is shown:** every 2 s, on a timer of the module's own with at least 0.2 s
-  tolerance, armed when the list appears and stopped when it goes or the panel closes.
+  tolerance, armed when the list appears and stopped when it goes or the panel closes. A tick
+  while a scan still runs starts none, so slow scans don't stack up.
 - **Background priority:** each scan runs as a `.background` task, and its result is applied when
   it arrives, as system health's scans (the app's design, "Low priority"). A result from a scan
   older than the one applied is dropped.

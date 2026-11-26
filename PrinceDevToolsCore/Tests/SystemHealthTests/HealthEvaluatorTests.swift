@@ -116,16 +116,30 @@ final class HealthEvaluatorTests: XCTestCase {
     func testMessageOrder() {
         var evaluator = HealthEvaluator()
         let readings = HealthReadings(
-            memory: .critical, cpu: fullCPU(95), diskFreeBytes: 1_000_000_000,
-            processCount: 4000, processLimit: 4000, thermal: .critical)
+            memory: .critical, cpu: fullCPU(95), busyProcess: BusyProcess(name: "node", percentOfCore: 98),
+            diskFreeBytes: 1_000_000_000, processCount: 4000, processLimit: 4000, thermal: .critical)
         let status = evaluator.evaluate(readings, settings: settings)
         XCTAssertEqual(status.messages, [
             .memory,
             .disk(freeBytes: 1_000_000_000),
             .processes(count: 4000, limit: 4000),
             .cpu(percent: 95, windowMinutes: 5),
+            .busyProcess(name: "node", percentOfCore: 98, windowMinutes: 5),
             .thermal(.critical),
         ])
+    }
+
+    func testABusyProcessTurnsCPURedWhileTheMachineAverageIsLow() {
+        var evaluator = HealthEvaluator()
+        let busy = BusyProcess(name: "node", percentOfCore: 98)
+        var status = evaluator.evaluate(HealthReadings(cpu: fullCPU(9), busyProcess: busy), settings: settings)
+        XCTAssertEqual(status.cpu, .red)
+        XCTAssertEqual(status.messages, [.busyProcess(name: "node", percentOfCore: 98, windowMinutes: 5)])
+        XCTAssertTrue(status.messages[0].opensActivityMonitor)
+
+        status = evaluator.evaluate(HealthReadings(cpu: fullCPU(9)), settings: settings)
+        XCTAssertEqual(status.cpu, .green)
+        XCTAssertEqual(status.messages, [])
     }
 
     func testOnlyDiskDoesNotOpenActivityMonitor() {

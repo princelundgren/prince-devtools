@@ -40,13 +40,15 @@ public enum HealthText {
 
     /// The Memory, CPU, Disk and Processes cards, in that order.
     ///
-    /// `windowMinutes` is the user's CPU window; a partial average words the span it covers so far.
+    /// `windowMinutes` is the user's CPU window; a partial average words the span it covers so far. A
+    /// busy process takes the CPU card's second line in place of the window.
     public static func cards(
         _ readings: HealthReadings, _ status: HealthStatus, windowMinutes: Int, locale: Locale
     ) -> [HealthCard] {
         [
             memoryCard(readings, state: status.memory, locale: locale),
-            cpuCard(readings.cpu, state: status.cpu, windowMinutes: windowMinutes, locale: locale),
+            cpuCard(readings.cpu, busyProcess: readings.busyProcess, state: status.cpu,
+                    windowMinutes: windowMinutes, locale: locale),
             diskCard(readings.diskFreeBytes, state: status.disk, locale: locale),
             processesCard(count: readings.processCount, limit: readings.processLimit,
                           state: status.processes, locale: locale),
@@ -64,6 +66,8 @@ public enum HealthText {
             "\(integer(count, locale: locale)) of \(integer(limit, locale: locale)) processes in use"
         case .cpu(let percent, let windowMinutes):
             "CPU avg \(windowMinutes) min is \(percentage(percent, locale: locale))"
+        case .busyProcess(let name, let percentOfCore, let windowMinutes):
+            "\(name) has used \(percentage(percentOfCore, locale: locale)) of a core for \(windowMinutes) min"
         case .thermal(.serious):
             "Mac is running hot"
         case .thermal(.critical):
@@ -93,7 +97,7 @@ public enum HealthText {
     }
 
     private static func cpuCard(
-        _ average: CPUAverage, state: CardState, windowMinutes: Int, locale: Locale
+        _ average: CPUAverage, busyProcess: BusyProcess?, state: CardState, windowMinutes: Int, locale: Locale
     ) -> HealthCard {
         let percent: Double
         let minutes: Int
@@ -107,8 +111,9 @@ public enum HealthText {
             percent = fullPercent
             minutes = windowMinutes
         }
+        let detail = busyProcess.map { "\($0.name) at \(percentage($0.percentOfCore, locale: locale)) of a core" }
         return HealthCard(title: "CPU", state: state, value: percentage(percent, locale: locale),
-                          detail: "avg \(minutes) min")
+                          detail: detail ?? "avg \(minutes) min")
     }
 
     private static func diskCard(_ freeBytes: UInt64?, state: CardState, locale: Locale) -> HealthCard {

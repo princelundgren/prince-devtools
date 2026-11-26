@@ -1,6 +1,6 @@
 ---
 status: building
-verified: 2026-11-25
+verified: 2026-11-26
 governs:
   - PrinceDevTools/**
   - PrinceDevToolsCore/**

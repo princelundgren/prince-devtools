@@ -29,6 +29,8 @@ public struct HealthReadings: Equatable, Sendable {
     public var swapUsedBytes: UInt64?
     /// The CPU busy share over the user's window.
     public var cpu: CPUAverage
+    /// One of the user's processes over its share of a core for the whole window, if any.
+    public var busyProcess: BusyProcess?
     /// Free space on the startup volume, in bytes.
     public var diskFreeBytes: UInt64?
     /// How many processes the user is running.
@@ -38,11 +40,12 @@ public struct HealthReadings: Equatable, Sendable {
     public var thermal: ThermalLevel
 
     public init(memory: MemoryLevel? = nil, swapUsedBytes: UInt64? = nil, cpu: CPUAverage = .notKnown,
-                diskFreeBytes: UInt64? = nil, processCount: Int? = nil, processLimit: Int? = nil,
-                thermal: ThermalLevel = .normal) {
+                busyProcess: BusyProcess? = nil, diskFreeBytes: UInt64? = nil, processCount: Int? = nil,
+                processLimit: Int? = nil, thermal: ThermalLevel = .normal) {
         self.memory = memory
         self.swapUsedBytes = swapUsedBytes
         self.cpu = cpu
+        self.busyProcess = busyProcess
         self.diskFreeBytes = diskFreeBytes
         self.processCount = processCount
         self.processLimit = processLimit
@@ -57,7 +60,7 @@ public enum CardState: Sendable, Equatable {
 
 /// What a message is about; the raw value is the order messages appear in.
 public enum HealthCause: Int, CaseIterable, Comparable, Sendable {
-    case memory, disk, processes, cpu, thermal
+    case memory, disk, processes, cpu, busyProcess, thermal
 
     public static func < (lhs: HealthCause, rhs: HealthCause) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -71,6 +74,8 @@ public enum HealthMessage: Equatable, Sendable {
     case processes(count: Int, limit: Int)
     /// `windowMinutes` is the user's setting, not the span the average actually covered.
     case cpu(percent: Double, windowMinutes: Int)
+    /// `percentOfCore` is the process's last interval; `windowMinutes` is the user's setting.
+    case busyProcess(name: String, percentOfCore: Double, windowMinutes: Int)
     case thermal(ThermalWarning)
 
     public var cause: HealthCause {
@@ -79,6 +84,7 @@ public enum HealthMessage: Equatable, Sendable {
         case .disk: .disk
         case .processes: .processes
         case .cpu: .cpu
+        case .busyProcess: .busyProcess
         case .thermal: .thermal
         }
     }
@@ -143,10 +149,15 @@ public struct HealthEvaluator: Sendable {
         let memory = memoryState(readings.memory, settings: settings)
         if memory == .red { messages.append(.memory) }
 
-        let cpu = cpuState(readings.cpu, settings: settings)
-        if cpu == .red, case .full(let percent, _) = readings.cpu {
+        let machineCPU = cpuState(readings.cpu, settings: settings)
+        if machineCPU == .red, case .full(let percent, _) = readings.cpu {
             messages.append(.cpu(percent: percent, windowMinutes: settings.cpuWindowMinutes))
         }
+        if let busy = readings.busyProcess {
+            messages.append(.busyProcess(name: busy.name, percentOfCore: busy.percentOfCore,
+                                         windowMinutes: settings.cpuWindowMinutes))
+        }
+        let cpu = readings.busyProcess == nil ? machineCPU : .red
 
         let disk = diskState(readings.diskFreeBytes, settings: settings)
         if disk == .red, let free = readings.diskFreeBytes { messages.append(.disk(freeBytes: free)) }

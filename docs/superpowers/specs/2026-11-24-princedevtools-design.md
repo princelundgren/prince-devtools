@@ -156,7 +156,8 @@ single app must not become overwhelming (owner).
   When a busy process turns the CPU card red, the card keeps the whole-machine average as its
   value and names the process on its second line, "node at 98 % of a core", in place of the
   window (owner, 2026-11-26), so the card and its VoiceOver label say why it is red.
-- **Cards** in a two-column grid; each has a title, a status symbol and one or two lines. States:
+- **Cards** in a two-column grid, all the same size: each as tall as the tallest, its lines at the
+  top (owner, 2026-11-26). Each has a title, a status symbol and one or two lines. States:
   green, red, memory's yellow, and **"Not known yet"** (neutral, never green or red) until a card
   has its first reading. Each state has its own symbol, never colour alone; colours use
   prince-clockin's tokens with their Increase Contrast variants. Each card is one VoiceOver

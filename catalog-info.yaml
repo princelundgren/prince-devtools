@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: prince-devtools
+  description: macOS menu bar app with a developer's everyday status and one-click actions
+spec:
+  type: app
+  lifecycle: production
+  owner: prince
+  system: apps

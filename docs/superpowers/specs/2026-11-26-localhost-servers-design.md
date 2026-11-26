@@ -1,5 +1,10 @@
 ---
-status: approved
+status: building
+verified: 2026-11-26
+governs:
+  - PrinceDevToolsCore/Sources/LocalServers/**
+  - PrinceDevToolsCore/Tests/LocalServersTests/**
+  - PrinceDevTools/PrinceDevTools/Server*.swift
 ---
 
 # PrinceDevTools: localhost servers

@@ -122,9 +122,10 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 
 ## The card
 
-- Title "Servers". Value "8 listening", "1 listening", "None listening"; detail "3 parent gone"
-  when any are, none otherwise. The "Not known yet" state until the first scan, then a new
-  informational tone, neither green nor red, with its own symbol (see "Shell changes").
+- Title "Servers". Value "8 listening", "1 listening", "None listening"; detail "3 orphaned"
+  when any are, none otherwise (owner chose "orphaned", 2026-11-26). The "Not known yet" state
+  until the first scan, then a new informational tone, neither green nor red, with its own symbol
+  (see "Shell changes").
 - A click on the card, or activating it with VoiceOver, shows the list. Its VoiceOver label
   names the value and the detail and says it opens the list.
 
@@ -133,7 +134,8 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - **Replaces the cards and messages** in the panel; a Back control at its top returns to them. The
   footer stays. The panel opens on the cards each time.
 - **Rows:** `:8000  python3  image-gen  10 h  ⚠`; the folder is its last component; the ⚠
-  symbol (with a help tag "The process that started it is gone") when its parent is gone.
+  symbol (with a help tag "Orphaned: the process that started it has exited") when its parent is
+  gone.
 - **Parent gone** (owner chose the chain, 2026-11-26): agents start servers through a wrapper
   (`npm run dev`, `uv run`, a shell), and when the session ends the wrapper is handed to `launchd`
   (pid 1), not the server under it (checked on macOS 27, 2026-11-26: after the outer shell exited,
@@ -147,7 +149,7 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - **Order:** rows with ⚠ first, then by port, then by pid.
 - **Help tag and VoiceOver label** per row: port, process, pid, the full folder with the home
   directory written `~`, the listening addresses (two for a merged IPv4 and IPv6 row), time
-  running, and "parent process gone" when it applies.
+  running in words ("10 hours"), and "orphaned" when it applies.
 - **A click on a row** opens `http://localhost:<port>` with `NSWorkspace.shared.open`; a server
   that isn't HTTP shows the browser's own error.
 - **Empty:** "No servers listening" in place of rows.

@@ -66,6 +66,18 @@ public struct CPURing: Sendable {
         samples.removeAll()
     }
 
+    /// How many cores' worth of busy time the machine spent between the two newest samples, or `nil`
+    /// with fewer than two samples or no time between them. `ticksPerSecond` is the unit of ``CPUTicks``.
+    public func busyCoresInLastInterval(ticksPerSecond: Int) -> Double? {
+        guard samples.count >= 2 else { return nil }
+        let older = samples[samples.count - 2]
+        let newest = samples[samples.count - 1]
+        let seconds = (newest.time - older.time) / .seconds(1)
+        guard seconds > 0, ticksPerSecond > 0 else { return nil }
+        let busy = newest.ticks.busyAndTotal(since: older.ticks).busy
+        return Double(busy) / Double(ticksPerSecond) / seconds
+    }
+
     /// Average busy percentage (user + system + nice, 0 to 100) over `window`.
     ///
     /// Divides by the ticks elapsed between the samples used, which track real time, so uneven timer

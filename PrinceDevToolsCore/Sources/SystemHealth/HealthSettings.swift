@@ -8,6 +8,9 @@ public struct HealthSettings: Equatable, Sendable {
     public var cpuPercent: Int
     /// The minutes the CPU average covers.
     public var cpuWindowMinutes: Int
+    /// The share of one core, in percent, that one of the user's processes must pass in every
+    /// minute of the CPU window to turn CPU red.
+    public var processCPUPercent: Int
     /// The free space, in gigabytes, below which disk turns red.
     public var diskFreeGB: Int
     /// The share of the per-user process limit, in percent, above which processes turn red.
@@ -15,13 +18,15 @@ public struct HealthSettings: Equatable, Sendable {
 
     /// The thresholds a fresh install starts with.
     public static let defaults = HealthSettings(
-        memoryRedLevel: .critical, cpuPercent: 80, cpuWindowMinutes: 5,
+        memoryRedLevel: .critical, cpuPercent: 80, cpuWindowMinutes: 5, processCPUPercent: 90,
         diskFreeGB: 30, processSharePercent: 80)
 
     /// The accepted values of ``cpuPercent``.
     public static let cpuPercentRange = 50...100
     /// The accepted values of ``cpuWindowMinutes``.
     public static let cpuWindowRange = 3...15
+    /// The accepted values of ``processCPUPercent``.
+    public static let processCPUPercentRange = 50...400
     /// The accepted values of ``diskFreeGB``.
     public static let diskFreeRange = 5...500
     /// The accepted values of ``processSharePercent``.
@@ -30,11 +35,12 @@ public struct HealthSettings: Equatable, Sendable {
     /// ``cpuWindowMinutes`` as a duration.
     public var cpuWindow: Duration { .seconds(cpuWindowMinutes * 60) }
 
-    public init(memoryRedLevel: MemoryLevel, cpuPercent: Int, cpuWindowMinutes: Int,
+    public init(memoryRedLevel: MemoryLevel, cpuPercent: Int, cpuWindowMinutes: Int, processCPUPercent: Int,
                 diskFreeGB: Int, processSharePercent: Int) {
         self.memoryRedLevel = memoryRedLevel
         self.cpuPercent = cpuPercent
         self.cpuWindowMinutes = cpuWindowMinutes
+        self.processCPUPercent = processCPUPercent
         self.diskFreeGB = diskFreeGB
         self.processSharePercent = processSharePercent
     }
@@ -50,15 +56,17 @@ public struct HealthSettings: Equatable, Sendable {
                 .flatMap { [.warning, .critical].contains($0) ? $0 : nil } ?? fallback.memoryRedLevel,
             cpuPercent: Self.read(Key.cpuPercent, in: Self.cpuPercentRange, from: defaults, default: fallback.cpuPercent),
             cpuWindowMinutes: Self.read(Key.cpuWindowMinutes, in: Self.cpuWindowRange, from: defaults, default: fallback.cpuWindowMinutes),
+            processCPUPercent: Self.read(Key.processCPUPercent, in: Self.processCPUPercentRange, from: defaults, default: fallback.processCPUPercent),
             diskFreeGB: Self.read(Key.diskFreeGB, in: Self.diskFreeRange, from: defaults, default: fallback.diskFreeGB),
             processSharePercent: Self.read(Key.processSharePercent, in: Self.processShareRange, from: defaults, default: fallback.processSharePercent))
     }
 
-    /// Writes all five thresholds as integers; `init(reading:)` reads them back.
+    /// Writes all six thresholds as integers; `init(reading:)` reads them back.
     public func save(to defaults: UserDefaults) {
         defaults.set(memoryRedLevel.rawValue, forKey: Key.memoryRedLevel)
         defaults.set(cpuPercent, forKey: Key.cpuPercent)
         defaults.set(cpuWindowMinutes, forKey: Key.cpuWindowMinutes)
+        defaults.set(processCPUPercent, forKey: Key.processCPUPercent)
         defaults.set(diskFreeGB, forKey: Key.diskFreeGB)
         defaults.set(processSharePercent, forKey: Key.processSharePercent)
     }
@@ -73,6 +81,7 @@ public struct HealthSettings: Equatable, Sendable {
         static let memoryRedLevel = "systemHealth.memoryRedLevel"
         static let cpuPercent = "systemHealth.cpuPercent"
         static let cpuWindowMinutes = "systemHealth.cpuWindowMinutes"
+        static let processCPUPercent = "systemHealth.processCPUPercent"
         static let diskFreeGB = "systemHealth.diskFreeGB"
         static let processSharePercent = "systemHealth.processSharePercent"
     }

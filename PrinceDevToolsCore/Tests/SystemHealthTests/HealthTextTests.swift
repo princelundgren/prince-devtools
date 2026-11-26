@@ -25,6 +25,8 @@ final class HealthTextTests: XCTestCase {
     func testMessagesUseTheDesignWording() {
         XCTAssertEqual(message(.memory), "Memory pressure is red")
         XCTAssertEqual(message(.cpu(percent: 91.4, windowMinutes: 5)), "CPU avg 5 min is 91 %")
+        XCTAssertEqual(message(.busyProcess(name: "node", percentOfCore: 97.6, windowMinutes: 5)),
+                       "node has used 98 % of a core for 5 min")
         XCTAssertEqual(message(.thermal(.serious)), "Mac is running hot")
         XCTAssertEqual(message(.thermal(.critical)), "Mac is slowing down from heat")
         XCTAssertEqual(message(.disk(freeBytes: 28_000_000_000)), "28 GB free on the startup disk")
@@ -102,6 +104,15 @@ final class HealthTextTests: XCTestCase {
         XCTAssertEqual(cpuCard(.partial(percent: 40, span: .seconds(50))).detail, "avg 1 min")
         XCTAssertEqual(cpuCard(.partial(percent: 40, span: .seconds(20))).detail, "avg 1 min")
         XCTAssertEqual(cpuCard(.full(percent: 40, span: .seconds(340))).detail, "avg 5 min")
+    }
+
+    func testABusyProcessTakesTheCPUCardsSecondLine() {
+        let readings = HealthReadings(cpu: .full(percent: 12, span: .seconds(300)),
+                                      busyProcess: BusyProcess(name: "node", percentOfCore: 98))
+        let card = cards(readings, status(cpu: .red))[1]
+        XCTAssertEqual(card.value, "12 %")
+        XCTAssertEqual(card.detail, "node at 98 % of a core")
+        XCTAssertEqual(card.accessibilityLabel, "CPU, 12 %, node at 98 % of a core, red")
     }
 
     func testCardAccessibilityLabelNamesValueAndState() {

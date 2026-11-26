@@ -22,7 +22,11 @@ struct SystemHealthSettingsPane: View {
                 Stepper(
                     "For \(monitor.settings.cpuWindowMinutes) min",
                     value: $monitor.settings.cpuWindowMinutes, in: HealthSettings.cpuWindowRange, step: 1)
-                SettingsNote("CPU turns red only once its average over the whole window passes the limit.")
+                Stepper(
+                    "Or one process over \(monitor.settings.processCPUPercent) % of a core",
+                    value: $monitor.settings.processCPUPercent, in: HealthSettings.processCPUPercentRange, step: 10)
+                SettingsNote(
+                    "CPU turns red once its average over the whole window passes the limit, or once one of your processes stays over that share of a core in every minute of the window.")
             }
             Section("Disk") {
                 Stepper(

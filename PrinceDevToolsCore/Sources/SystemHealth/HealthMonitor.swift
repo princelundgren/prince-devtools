@@ -3,7 +3,9 @@ import Observation
 
 /// Keeps ``readings``, ``status`` and ``culprits`` current, cheaply: one 60 s timer, a 2 s one only
 /// while the panel is open, the memory-pressure and thermal events, and a process scan only when a
-/// message appears or the panel opens on one.
+/// message appears or the panel opens on one, or on the 60 s tick while the machine was busy enough
+/// in the last minute for one process to be at its clearing share of a core. Every scan runs at
+/// background priority, and nothing waits on it.
 ///
 /// Call ``start()`` once, and ``stop()`` before releasing the monitor; the app forwards the
 /// system's sleep and wake and the panel's opening and closing.
@@ -26,6 +28,7 @@ public final class HealthMonitor {
         didSet {
             settings.save(to: defaults)
             readings.cpu = cpuRing.average(over: settings.cpuWindow)
+            readings.busyProcess = busiestProcess()
             evaluate()
         }
     }
@@ -41,6 +44,9 @@ public final class HealthMonitor {
     @ObservationIgnored private var isPanelOpen = false
     @ObservationIgnored private var culpritGeneration = 0
     @ObservationIgnored private var culpritSearches: [HealthCause: Task<Void, Never>] = [:]
+    @ObservationIgnored private var busyTracker = BusyProcessTracker()
+    @ObservationIgnored private var busyGeneration = 0
+    @ObservationIgnored private var busyScan: Task<Void, Never>?
 
     /// A monitor that reads `source` and keeps its settings in `defaults`; it reads nothing until ``start()``.
     public init(source: HealthSource = .live, defaults: UserDefaults = .standard) {
@@ -74,7 +80,8 @@ public final class HealthMonitor {
         armTickTimer()
     }
 
-    /// Stops both timers and both event subscriptions; a culprit search still running is discarded.
+    /// Stops both timers and both event subscriptions; a culprit search or process scan still running
+    /// is discarded, and with it any busy process.
     public func stop() {
         disarmTimers()
         if let thermalObserver { NotificationCenter.default.removeObserver(thermalObserver) }
@@ -82,17 +89,21 @@ public final class HealthMonitor {
         memoryPressureSource?.cancel()
         memoryPressureSource = nil
         culpritGeneration += 1
+        forgetBusyProcesses()
     }
 
-    /// Stops both timers until ``wake()``; a culprit search still running is discarded.
+    /// Stops both timers until ``wake()``; a culprit search or process scan still running is discarded.
     public func sleep() {
         disarmTimers()
         culpritGeneration += 1
+        forgetBusyProcesses()
     }
 
-    /// Drops the CPU samples, and with them any CPU message, reads everything and re-arms the timers.
+    /// Drops the CPU samples and the busy-process counts, and with them any CPU message, reads
+    /// everything and re-arms the timers.
     public func wake() {
         cpuRing.removeAll()
+        forgetBusyProcesses()
         readEverything()
         appendCPUSample()
         evaluate()
@@ -121,6 +132,7 @@ public final class HealthMonitor {
     func tick() {
         appendCPUSample()
         readPolledMetrics()
+        trackBusyProcesses()
         evaluate()
     }
 
@@ -141,6 +153,10 @@ public final class HealthMonitor {
 
     func culpritSearchesFinished() async {
         for search in culpritSearches.values { await search.value }
+    }
+
+    func busyScanFinished() async {
+        await busyScan?.value
     }
 
     private func readEverything() {
@@ -167,6 +183,36 @@ public final class HealthMonitor {
         readings.cpu = cpuRing.average(over: settings.cpuWindow)
     }
 
+    /// Scans the user's processes when the last minute's busy time could hold one at its clearing
+    /// share of a core; otherwise no process can be, so the counts go.
+    private func trackBusyProcesses() {
+        let clearingCores = (Double(settings.processCPUPercent) - BusyProcessTracker.clearMarginPercent) / 100
+        guard let busyCores = cpuRing.busyCoresInLastInterval(ticksPerSecond: source.ticksPerSecond),
+            busyCores >= clearingCores
+        else {
+            forgetBusyProcesses()
+            return
+        }
+        let generation = busyGeneration
+        busyScan = Task(priority: .background) { [source] in
+            let (cpuTimes, time) = await Self.timedCPUTimes(source)
+            guard generation == busyGeneration else { return }
+            busyTracker.record(cpuTimes, at: time, timebase: source.timebase)
+            readings.busyProcess = busiestProcess()
+            evaluate()
+        }
+    }
+
+    private func busiestProcess() -> BusyProcess? {
+        busyTracker.busiest(over: settings.processCPUPercent, window: settings.cpuWindow, name: source.processName)
+    }
+
+    private func forgetBusyProcesses() {
+        busyGeneration += 1
+        busyTracker.reset()
+        readings.busyProcess = nil
+    }
+
     private func evaluate() {
         let shownBefore = Set(status.messages.map(\.cause))
         status = evaluator.evaluate(readings, settings: settings)
@@ -182,7 +228,7 @@ public final class HealthMonitor {
     private func startCulpritSearch(for cause: HealthCause) {
         guard let search = culpritSearch(for: cause) else { return }
         let generation = culpritGeneration
-        culpritSearches[cause] = Task {
+        culpritSearches[cause] = Task(priority: .background) {
             let culprit = await search()
             guard generation == culpritGeneration, isShown(cause) else { return }
             culprits[cause] = culprit
@@ -194,7 +240,7 @@ public final class HealthMonitor {
         case .memory: { [source] in CulpritFinder.memory(await Self.scan(source)) }
         case .processes: { [source] in CulpritFinder.processes(await Self.scan(source)) }
         case .cpu: { [source] in await Self.cpuCulprit(source) }
-        case .disk, .thermal: nil
+        case .disk, .busyProcess, .thermal: nil
         }
     }
 
@@ -217,6 +263,12 @@ public final class HealthMonitor {
     @concurrent
     private static func scan(_ source: HealthSource) async -> [ProcessUsage] {
         source.processUsages()
+    }
+
+    @concurrent
+    private static func timedCPUTimes(_ source: HealthSource) async -> ([pid_t: UInt64], ContinuousClock.Instant) {
+        let cpuTimes = source.processCPUTimes()
+        return (cpuTimes, source.now())
     }
 
     private func armTickTimer() {

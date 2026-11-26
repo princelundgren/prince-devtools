@@ -19,8 +19,9 @@ public func processUsages(pids: [pid_t], read: (pid_t) -> Result<ProcessUsage, E
 }
 
 /// Reads the machine's health figures from the kernel. No function blocks or traps, and all but
-/// ``processUsages()``, which walks every process, are a few syscalls. One that cannot read its
-/// figure returns `nil` (or an empty list); ``thermalLevel()`` always returns a level.
+/// ``processUsages()`` and ``processCPUTimes()``, which walk every process, are a few syscalls. One
+/// that cannot read its figure returns `nil` (or an empty list); ``thermalLevel()`` always returns
+/// a level.
 public enum SystemReader {
     /// Kernel clock ticks per second, the unit of ``CPUTicks``.
     public static let ticksPerSecond = Int(sysconf(_SC_CLK_TCK))
@@ -77,6 +78,22 @@ public enum SystemReader {
         SystemHealth.processUsages(pids: ownPIDs() ?? [], read: readUsage)
     }
 
+    /// The cumulative CPU time of every readable process of this user, in Mach time units, by pid;
+    /// empty when the process list cannot be read. Reads one `proc_pid_rusage` per process and no
+    /// paths.
+    public static func processCPUTimes() -> [pid_t: UInt64] {
+        var cpuTimes: [pid_t: UInt64] = [:]
+        for pid in ownPIDs() ?? [] {
+            if case .success(let info) = rusage(of: pid) { cpuTimes[pid] = info.cpuTime }
+        }
+        return cpuTimes
+    }
+
+    /// The last component of `pid`'s executable path, or `nil` once it has exited or can't be read.
+    public static func processName(of pid: pid_t) -> String? {
+        try? name(of: pid).get()
+    }
+
     /// How many processes this user may run (see ``effectiveProcessLimit(softLimit:maxProcPerUID:)``),
     /// or `nil` when the limits cannot be read or `kern.maxprocperuid` is not positive.
     public static func processLimit() -> Int? {
@@ -116,25 +133,38 @@ public enum SystemReader {
     }
 
     private static func readUsage(of pid: pid_t) -> Result<ProcessUsage, Errno> {
+        rusage(of: pid).flatMap { info in
+            name(of: pid).map { name in
+                ProcessUsage(
+                    pid: pid,
+                    name: name,
+                    footprintBytes: info.ri_phys_footprint,
+                    cpuTime: info.cpuTime)
+            }
+        }
+    }
+
+    private static func rusage(of pid: pid_t) -> Result<rusage_info_v4, Errno> {
         var info = rusage_info_v4()
         let status = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
                 proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
             }
         }
-        guard status == 0 else { return .failure(Errno(rawValue: errno)) }
+        return status == 0 ? .success(info) : .failure(Errno(rawValue: errno))
+    }
 
+    private static func name(of pid: pid_t) -> Result<String, Errno> {
         var path = [UInt8](repeating: 0, count: 4096)
         let pathLength = proc_pidpath(pid, &path, UInt32(path.count))
         guard pathLength > 0 else { return .failure(Errno(rawValue: errno)) }
         let executablePath = FilePath(String(decoding: path.prefix(Int(pathLength)), as: UTF8.self))
         guard let name = executablePath.lastComponent?.string else { return .failure(.invalidArgument) }
-
-        return .success(
-            ProcessUsage(
-                pid: pid,
-                name: name,
-                footprintBytes: info.ri_phys_footprint,
-                cpuTime: info.ri_user_time &+ info.ri_system_time))
+        return .success(name)
     }
+}
+
+private extension rusage_info_v4 {
+    /// User plus system CPU time, in Mach time units.
+    var cpuTime: UInt64 { ri_user_time &+ ri_system_time }
 }

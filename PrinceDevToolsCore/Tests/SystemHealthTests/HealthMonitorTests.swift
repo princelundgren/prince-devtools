@@ -4,13 +4,21 @@ import XCTest
 @testable import SystemHealth
 
 /// A machine whose readings, clock and pause the test sets. `processUsages` returns "busy-tool"
-/// with 1 s more CPU time on every call, so a CPU culprit search finds it at 50 % of a core. A
-/// pause adds `busyTicksPerPause` user ticks to the machine's counters.
+/// with 1 s more CPU time on every call, so a CPU culprit search finds it at 50 % of a core, and
+/// "loop" with `loopCPUTime`, which the test advances; `processCPUTimes` returns the same CPU times
+/// by pid, and `processName` their names. A pause adds `busyTicksPerPause` user ticks
+/// to the machine's counters. The clock ticks 100 times a second, so 6,000 busy ticks a minute is
+/// one core.
 private final class FakeSystem: Sendable {
     enum Reading: CaseIterable {
         case memoryLevel, swapUsedBytes, cpuTicks, diskFreeBytes, processCount, processLimit, thermalLevel,
-            processUsages
+            processUsages, processCPUTimes, processName
+
+        /// The reads that walk processes or name one, which only a scan makes.
+        var isScan: Bool { [.processUsages, .processCPUTimes, .processName].contains(self) }
     }
+
+    static let names: [pid_t: String] = [4: "loop", 1: "busy-tool", 2: "node", 3: "node"]
 
     struct Values {
         var memory: MemoryLevel? = .normal
@@ -22,7 +30,10 @@ private final class FakeSystem: Sendable {
         var thermal = ThermalLevel.normal
         var now = ContinuousClock.now
         var reads: [Reading: Int] = [:]
+        /// The base priority of the task each scan ran in, in order.
+        var scanPriorities: [TaskPriority?] = []
         var busyTicksPerPause: UInt32 = 0
+        var loopCPUTime: UInt64 = 0
         var holdsPause = false
         var heldPause: CheckedContinuation<Void, Never>?
         var pauseWaiter: CheckedContinuation<Void, Never>?
@@ -75,13 +86,25 @@ private final class FakeSystem: Sendable {
             processLimit: { self.read(.processLimit) { $0.limit } },
             thermalLevel: { self.read(.thermalLevel) { $0.thermal } },
             processUsages: {
-                let call = UInt64(self.read(.processUsages) { $0.reads[.processUsages, default: 0] })
+                self.set { $0.scanPriorities.append(Task.basePriority) }
+                let (call, loopCPUTime) = self.read(.processUsages) {
+                    (UInt64($0.reads[.processUsages, default: 0]), $0.loopCPUTime)
+                }
                 return [
+                    ProcessUsage(pid: 4, name: "loop", footprintBytes: 1, cpuTime: loopCPUTime),
                     ProcessUsage(pid: 1, name: "busy-tool", footprintBytes: 100, cpuTime: call * 1_000_000_000),
                     ProcessUsage(pid: 2, name: "node", footprintBytes: 500, cpuTime: 0),
                     ProcessUsage(pid: 3, name: "node", footprintBytes: 300, cpuTime: 0),
                 ]
             },
+            processCPUTimes: {
+                self.set { $0.scanPriorities.append(Task.basePriority) }
+                let (call, loopCPUTime) = self.read(.processCPUTimes) {
+                    (UInt64($0.reads[.processCPUTimes, default: 0]), $0.loopCPUTime)
+                }
+                return [4: loopCPUTime, 1: call * 1_000_000_000, 2: 0, 3: 0]
+            },
+            processName: { pid in self.read(.processName) { _ in Self.names[pid] } },
             now: { self.values.withLock { $0.now } },
             pause: { duration in await self.pause(duration) },
             timebase: MachTimebase(numer: 1, denom: 1),
@@ -150,10 +173,9 @@ final class HealthMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.status.cpu, .notKnown)
         XCTAssertEqual(monitor.readings.thermal, .serious)
         XCTAssertEqual(monitor.status.messages, [.thermal(.serious)])
-        for reading in FakeSystem.Reading.allCases where reading != .processUsages {
-            XCTAssertEqual(fake.reads(reading), 1, "\(reading)")
+        for reading in FakeSystem.Reading.allCases {
+            XCTAssertEqual(fake.reads(reading), reading.isScan ? 0 : 1, "\(reading): a thermal message never starts a scan")
         }
-        XCTAssertEqual(fake.reads(.processUsages), 0, "a thermal message never starts a scan")
         monitor.stop()
     }
 
@@ -347,7 +369,9 @@ final class HealthMonitorTests: XCTestCase {
 
     /// The CPU culprit after the default five minutes at 90 %, with `busyTicks` machine ticks
     /// (100 a second) spent during the culprit's 2 s pause, in which busy-tool uses 1 s.
-    private func cpuCulprit(busyTicksDuringPause busyTicks: UInt32) async -> (Culprit?, processScans: Int) {
+    private func cpuCulprit(
+        busyTicksDuringPause busyTicks: UInt32
+    ) async -> (Culprit?, processScans: Int, priorities: [TaskPriority?]) {
         let fake = FakeSystem()
         fake.set { $0.busyTicksPerPause = busyTicks }
         let (monitor, _) = makeMonitor(fake)
@@ -355,7 +379,7 @@ final class HealthMonitorTests: XCTestCase {
         driveCPURed(monitor, fake)
         await monitor.culpritSearchesFinished()
         monitor.stop()
-        return (monitor.culprits[.cpu], fake.reads(.processUsages))
+        return (monitor.culprits[.cpu], fake.reads(.processUsages), fake.values.withLock { $0.scanPriorities })
     }
 
     private func assertBusyTool(_ culprit: Culprit?, line: UInt = #line) {
@@ -367,17 +391,18 @@ final class HealthMonitorTests: XCTestCase {
     }
 
     func testCPUCulpritComparesTwoScansTwoSecondsApart() async {
-        let (culprit, processScans) = await cpuCulprit(busyTicksDuringPause: 0)
+        let (culprit, processScans, priorities) = await cpuCulprit(busyTicksDuringPause: 0)
 
         XCTAssertEqual(processScans, 2)
+        XCTAssertEqual(priorities, [.background, .background])
         assertBusyTool(culprit)
     }
 
     func testCPUCulpritIsMostlySystemWhenUserProcessesUseUnderHalfTheBusyTime() async {
-        let (threeSecondsBusy, _) = await cpuCulprit(busyTicksDuringPause: 300)
+        let (threeSecondsBusy, _, _) = await cpuCulprit(busyTicksDuringPause: 300)
         XCTAssertEqual(threeSecondsBusy, .mostlySystem)
 
-        let (oneAndAHalfSecondsBusy, _) = await cpuCulprit(busyTicksDuringPause: 150)
+        let (oneAndAHalfSecondsBusy, _, _) = await cpuCulprit(busyTicksDuringPause: 150)
         assertBusyTool(oneAndAHalfSecondsBusy)
     }
 
@@ -428,7 +453,11 @@ final class HealthMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.status.messages, [.memory, .thermal(.critical)])
         XCTAssertEqual(monitor.culprits, [.memory: .memory(name: "node", bytes: 500)])
         for reading in FakeSystem.Reading.allCases {
-            let expected = [.memoryLevel, .thermalLevel].contains(reading) ? 2 : 1
+            let expected = switch reading {
+            case .memoryLevel, .thermalLevel: 2
+            case .processCPUTimes, .processName: 0
+            default: 1
+            }
             XCTAssertEqual(fake.reads(reading), expected, "\(reading)")
         }
         monitor.stop()
@@ -446,6 +475,124 @@ final class HealthMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.status.messages, [.disk(freeBytes: 10 * gigabyte)])
         XCTAssertEqual(fake.reads(.processUsages), 0)
         XCTAssertTrue(monitor.culprits.isEmpty)
+        monitor.stop()
+    }
+
+    /// A minute in which "loop" uses 98 % of a core and the machine one core in all.
+    private func passLoopMinute(_ monitor: HealthMonitor, _ fake: FakeSystem) async {
+        fake.passMinute(busy: 6000, idle: 66_000)
+        fake.set { $0.loopCPUTime += 58_800_000_000 }
+        monitor.tick()
+        await monitor.busyScanFinished()
+    }
+
+    func testOneBusyProcessTurnsCPURedAfterAWholeWindow() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+
+        for minute in 1...5 {
+            await passLoopMinute(monitor, fake)
+            XCTAssertEqual(monitor.status.cpu, .green, "minute \(minute): the first scan is only a baseline")
+        }
+        await passLoopMinute(monitor, fake)
+
+        XCTAssertEqual(monitor.status.cpu, .red)
+        XCTAssertEqual(monitor.status.messages, [.busyProcess(name: "loop", percentOfCore: 98, windowMinutes: 5)])
+        XCTAssertEqual(fake.reads(.processCPUTimes), 6)
+        XCTAssertEqual(fake.reads(.processUsages), 0, "the busy-process scan reads no paths")
+        XCTAssertEqual(fake.reads(.processName), 1, "only the red process is named")
+        XCTAssertEqual(fake.values.withLock { $0.scanPriorities }, Array(repeating: .background, count: 6))
+        monitor.stop()
+    }
+
+    func testAnIdleMachineIsNeverScanned() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+
+        for _ in 0..<10 {
+            fake.passMinute(busy: 5000, idle: 67_000)
+            monitor.tick()
+            await monitor.busyScanFinished()
+        }
+
+        XCTAssertEqual(fake.reads(.processCPUTimes), 0, "5,000 ticks a minute is under 85 % of a core")
+        monitor.stop()
+    }
+
+    func testAQuietMinuteDropsTheBusyProcess() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        for _ in 0..<6 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.cpu, .red)
+
+        fake.passMinute(busy: 100, idle: 71_900)
+        monitor.tick()
+
+        XCTAssertEqual(monitor.status.cpu, .green)
+        XCTAssertEqual(monitor.status.messages, [])
+        monitor.stop()
+    }
+
+    func testSleepDropsTheBusyProcess() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        for _ in 0..<6 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.cpu, .red)
+
+        monitor.sleep()
+        monitor.wake()
+
+        XCTAssertEqual(monitor.status.messages, [])
+        for _ in 0..<5 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.messages, [], "a whole window again before it can be red")
+        monitor.stop()
+    }
+
+    func testWakeAloneDropsTheBusyProcess() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        for _ in 0..<6 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.cpu, .red)
+
+        monitor.wake()
+
+        XCTAssertEqual(monitor.status.messages, [], "a wake the app wasn't told of a sleep before")
+        monitor.stop()
+    }
+
+    func testTheGateStaysOpenAtTheClearingShare() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        for _ in 0..<6 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.cpu, .red)
+
+        fake.passMinute(busy: 5_200, idle: 66_800)
+        fake.set { $0.loopCPUTime += 51_600_000_000 }
+        monitor.tick()
+        await monitor.busyScanFinished()
+
+        XCTAssertEqual(monitor.status.messages, [.busyProcess(name: "loop", percentOfCore: 86, windowMinutes: 5)],
+                       "0.87 cores busy is over the 0.85 clearing share, and 86 % is inside the margin")
+        monitor.stop()
+    }
+
+    func testRaisingTheProcessThresholdClearsTheBusyProcessAtOnce() async {
+        let fake = FakeSystem()
+        let (monitor, _) = makeMonitor(fake)
+        monitor.start()
+        for _ in 0..<6 { await passLoopMinute(monitor, fake) }
+        XCTAssertEqual(monitor.status.cpu, .red)
+
+        monitor.settings.processCPUPercent = 100
+
+        XCTAssertEqual(monitor.status.cpu, .green)
+        XCTAssertEqual(monitor.status.messages, [])
         monitor.stop()
     }
 }

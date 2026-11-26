@@ -11,9 +11,10 @@ panel, in place of a menu bar app for each job.
 ## What it does
 
 - **One menu bar icon** that changes only when something needs attention.
-- **System health** as a panel of cards: memory pressure, CPU averaged over minutes, free disk
-  space, and your process count against the macOS limit, each against a threshold you can change
-  in Settings.
+- **System health** as a panel of cards: memory pressure, CPU (averaged over minutes for the whole
+  Mac, and checked minute by minute for any one of your processes that keeps a core busy), free
+  disk space, and your process count against the macOS limit, each against a threshold you can
+  change in Settings.
 - **When something is red**, a message names the problem and, where a process is behind it, the
   process most responsible, with an **Open Activity Monitor** button.
 - **Cheap to run**: no idle CPU, about one wakeup a minute until the panel is first opened, low

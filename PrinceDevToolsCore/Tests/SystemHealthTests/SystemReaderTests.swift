@@ -47,4 +47,11 @@ final class SystemReaderTests: XCTestCase {
         XCTAssertEqual(found.name, name)
         XCTAssertGreaterThan(found.footprintBytes, 0)
     }
+
+    func testLiveCPUTimesAndNameMatchTheFullScan() throws {
+        let before = try XCTUnwrap(SystemReader.processUsages().first { $0.pid == getpid() })
+        let cpuTime = try XCTUnwrap(SystemReader.processCPUTimes()[getpid()])
+        XCTAssertGreaterThanOrEqual(cpuTime, before.cpuTime)
+        XCTAssertEqual(SystemReader.processName(of: getpid()), before.name)
+    }
 }

@@ -15,6 +15,7 @@ final class HealthSettingsTests: XCTestCase {
             XCTAssertEqual(settings.memoryRedLevel, .critical)
             XCTAssertEqual(settings.cpuPercent, 80)
             XCTAssertEqual(settings.cpuWindowMinutes, 5)
+            XCTAssertEqual(settings.processCPUPercent, 90)
             XCTAssertEqual(settings.diskFreeGB, 30)
             XCTAssertEqual(settings.processSharePercent, 80)
             XCTAssertEqual(settings, HealthSettings.defaults)
@@ -29,6 +30,8 @@ final class HealthSettingsTests: XCTestCase {
             ("systemHealth.cpuWindowMinutes", 99, \.cpuWindowMinutes, 15),
             ("systemHealth.cpuWindowMinutes", 1, \.cpuWindowMinutes, 3),
             ("systemHealth.cpuWindowMinutes", -3, \.cpuWindowMinutes, 3),
+            ("systemHealth.processCPUPercent", 10, \.processCPUPercent, 50),
+            ("systemHealth.processCPUPercent", 1000, \.processCPUPercent, 400),
             ("systemHealth.diskFreeGB", 1, \.diskFreeGB, 5),
             ("systemHealth.diskFreeGB", 9999, \.diskFreeGB, 500),
             ("systemHealth.processSharePercent", 20, \.processSharePercent, 50),
@@ -73,7 +76,7 @@ final class HealthSettingsTests: XCTestCase {
     func testSaveRoundTrips() {
         withDefaults { defaults in
             let saved = HealthSettings(memoryRedLevel: .warning, cpuPercent: 90, cpuWindowMinutes: 10,
-                                       diskFreeGB: 50, processSharePercent: 70)
+                                       processCPUPercent: 150, diskFreeGB: 50, processSharePercent: 70)
             saved.save(to: defaults)
             XCTAssertEqual(HealthSettings(reading: defaults), saved)
             XCTAssertEqual(defaults.object(forKey: "systemHealth.memoryRedLevel") as? Int, 2)

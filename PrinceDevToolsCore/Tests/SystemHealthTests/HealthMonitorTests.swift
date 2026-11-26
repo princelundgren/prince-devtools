@@ -86,6 +86,7 @@ private final class FakeSystem: Sendable {
             processLimit: { self.read(.processLimit) { $0.limit } },
             thermalLevel: { self.read(.thermalLevel) { $0.thermal } },
             processUsages: {
+                self.set { $0.scanPriorities.append(Task.basePriority) }
                 let (call, loopCPUTime) = self.read(.processUsages) {
                     (UInt64($0.reads[.processUsages, default: 0]), $0.loopCPUTime)
                 }
@@ -368,7 +369,9 @@ final class HealthMonitorTests: XCTestCase {
 
     /// The CPU culprit after the default five minutes at 90 %, with `busyTicks` machine ticks
     /// (100 a second) spent during the culprit's 2 s pause, in which busy-tool uses 1 s.
-    private func cpuCulprit(busyTicksDuringPause busyTicks: UInt32) async -> (Culprit?, processScans: Int) {
+    private func cpuCulprit(
+        busyTicksDuringPause busyTicks: UInt32
+    ) async -> (Culprit?, processScans: Int, priorities: [TaskPriority?]) {
         let fake = FakeSystem()
         fake.set { $0.busyTicksPerPause = busyTicks }
         let (monitor, _) = makeMonitor(fake)
@@ -376,7 +379,7 @@ final class HealthMonitorTests: XCTestCase {
         driveCPURed(monitor, fake)
         await monitor.culpritSearchesFinished()
         monitor.stop()
-        return (monitor.culprits[.cpu], fake.reads(.processUsages))
+        return (monitor.culprits[.cpu], fake.reads(.processUsages), fake.values.withLock { $0.scanPriorities })
     }
 
     private func assertBusyTool(_ culprit: Culprit?, line: UInt = #line) {
@@ -388,17 +391,18 @@ final class HealthMonitorTests: XCTestCase {
     }
 
     func testCPUCulpritComparesTwoScansTwoSecondsApart() async {
-        let (culprit, processScans) = await cpuCulprit(busyTicksDuringPause: 0)
+        let (culprit, processScans, priorities) = await cpuCulprit(busyTicksDuringPause: 0)
 
         XCTAssertEqual(processScans, 2)
+        XCTAssertEqual(priorities, [.background, .background])
         assertBusyTool(culprit)
     }
 
     func testCPUCulpritIsMostlySystemWhenUserProcessesUseUnderHalfTheBusyTime() async {
-        let (threeSecondsBusy, _) = await cpuCulprit(busyTicksDuringPause: 300)
+        let (threeSecondsBusy, _, _) = await cpuCulprit(busyTicksDuringPause: 300)
         XCTAssertEqual(threeSecondsBusy, .mostlySystem)
 
-        let (oneAndAHalfSecondsBusy, _) = await cpuCulprit(busyTicksDuringPause: 150)
+        let (oneAndAHalfSecondsBusy, _, _) = await cpuCulprit(busyTicksDuringPause: 150)
         assertBusyTool(oneAndAHalfSecondsBusy)
     }
 

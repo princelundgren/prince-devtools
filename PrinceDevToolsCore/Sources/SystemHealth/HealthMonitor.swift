@@ -4,8 +4,8 @@ import Observation
 /// Keeps ``readings``, ``status`` and ``culprits`` current, cheaply: one 60 s timer, a 2 s one only
 /// while the panel is open, the memory-pressure and thermal events, and a process scan only when a
 /// message appears or the panel opens on one, or on the 60 s tick while the machine was busy enough
-/// in the last minute for one process to be at its clearing share of a core. That busy-process scan
-/// runs at background priority, and nothing waits on it.
+/// in the last minute for one process to be at its clearing share of a core. Every scan runs at
+/// background priority, and nothing waits on it.
 ///
 /// Call ``start()`` once, and ``stop()`` before releasing the monitor; the app forwards the
 /// system's sleep and wake and the panel's opening and closing.
@@ -228,7 +228,7 @@ public final class HealthMonitor {
     private func startCulpritSearch(for cause: HealthCause) {
         guard let search = culpritSearch(for: cause) else { return }
         let generation = culpritGeneration
-        culpritSearches[cause] = Task {
+        culpritSearches[cause] = Task(priority: .background) {
             let culprit = await search()
             guard generation == culpritGeneration, isShown(cause) else { return }
             culprits[cause] = culprit

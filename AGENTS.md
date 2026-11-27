@@ -11,9 +11,12 @@ Everything in this repository is public: code, docs, commit messages, issues and
 - **No subprocesses.** The app reads the kernel through its APIs and opens other apps only through
   `NSWorkspace`.
 - **Changes land through a pull request**, with signed commits.
-- **CI runs on GitHub's `xcode-27` runner** with Xcode 27.2 selected. Every action is pinned by
-  full commit SHA, except the Claude review: it calls the shared reusable workflow at its moving
-  `v2` tag, since only that repository's maintainer can move its `v*` tags.
+- **CI runs on the maintainer's self-hosted pool `prince-devtools-macos`**, a fresh macOS VM per
+  job with Xcode 27.2 selected, no secrets and no local network. A fork's pull request runs on
+  GitHub's `xcode-27` instead. The release's other jobs and CodeQL run on GitHub-hosted runners;
+  the release's test job reuses CI, in the pool. Every action is pinned by full commit SHA, except
+  the Claude review: it calls the shared reusable workflow at its moving `v2` tag, since only that
+  repository's maintainer can move its `v*` tags.
 - **CodeQL scans Swift and the workflows** (`.github/workflows/codeql.yml`). Its Swift scan runs on
   `macos-26` with Xcode 26.6, since CodeQL can't trace a build with Xcode 27.
 - **Build and test** from the repository root:

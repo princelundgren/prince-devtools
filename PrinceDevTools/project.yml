@@ -26,7 +26,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.princelundgren.princedevtools
     dependencies:
       - package: PrinceDevToolsCore
-        products: [SystemHealth, PanelKit]
+        products: [SystemHealth, PanelKit, LocalServers, Containers]
       - package: Sparkle
 packages:
   PrinceDevToolsCore:

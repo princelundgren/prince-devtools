@@ -1,5 +1,10 @@
 ---
-status: approved
+status: building
+verified: 2026-11-27
+governs:
+  - PrinceDevToolsCore/Sources/LocalServers/**
+  - PrinceDevToolsCore/Tests/LocalServersTests/**
+  - PrinceDevTools/PrinceDevTools/Server*.swift
 ---
 
 # PrinceDevTools: localhost servers
@@ -20,16 +25,14 @@ looked up, not an alarm.
 - **A Servers card** in the panel's grid: how many servers listen, and how many have lost the
   process that started them. A click on it shows the list (owner chose a card that opens a list,
   for a glance first and the detail a click away).
-- **A row per server:** port, process name, folder, time running, and a mark when its parent
-  process is gone. A click opens `http://localhost:<port>` in the default browser.
+- **A row per server:** port, process name, pid, folder, time running, and a mark when its parent
+  process is gone. Its menu opens `http://localhost:<port>` in the default browser.
 - **Only the servers someone started** (owner chose the fixed-ports and home-folder filters): see
   "Which listeners show".
 - As cheap as the rest of the app: no scan while the panel is closed.
 
 ## Non-goals
 
-- **Stopping a server from the panel** (owner kept the app's rule, 2026-11-26): Activity Monitor
-  does that. The list keeps an Open Activity Monitor button.
 - **Alerts:** no message, no red or yellow card, no change to the menu bar icon. A running server
   is not a fault (this design's call).
 - Linking a server to the agent session that started it, its git branch, or its memory and CPU.
@@ -56,7 +59,7 @@ looked up, not an alarm.
 2. **Adopt WhatThePort** (`tomjohndesign/what-the-port`, MIT, Swift, active), and drop the tool.
    It already does this and more (the agent session behind a server, its branch, leak warnings,
    stopping), but it is a second menu bar app, which PrinceDevTools exists to replace, and it runs
-   `/usr/sbin/lsof`, notifies, and stops processes, each against this app's rules. Rejected. Its
+   `/usr/sbin/lsof` and notifies, both against this app's rules. Rejected. Its
    code may be read for reference, with credit for anything taken. manfath (`Dnymte/manfath`, MIT)
    is the same shape, also on `lsof`.
 3. **Port WhatThePort's code:** its core parses `lsof` output, which the no-subprocess rule
@@ -103,13 +106,12 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   the read fails with `ENOENT` (older leftovers, which `lsof` can't read either), or it still
   returns the old path (a folder deleted seconds before). So "folder gone" is a failed read, an
   empty path, or an `lstat` of the path that fails with `ENOENT` or finds another inode or device.
-  - Unverified: an `lstat` under Desktop, Documents or Downloads may raise a privacy (TCC) prompt
-    for an app without its grants. The builder checks with a fresh app identity; if it prompts,
-    the `lstat` goes, and "folder gone" comes only from a failed read.
+  - No privacy (TCC) prompt: an `lstat` of a server's folder in `~/Documents` raised none for a
+    fresh, unsigned app identity (macOS 27, 2026-11-27).
 - **Start time and parent:** `proc_pidinfo(PROC_PIDTBSDINFO)` → `pbi_start_tvsec` and `pbi_ppid`,
   for each server's process, then up its chain only as far as the walk climbs (see "Parent gone"),
-  not for every process. A walked process's folder is read with `PROC_PIDVNODEPATHINFO` only, no
-  `lstat`, when its parent is 1.
+  not for every process. Each walked process's folder is read with its record, by
+  `PROC_PIDVNODEPATHINFO` alone, no `lstat`; the walk uses it only when the parent is 1.
 - **Failures:** a process whose sockets or start time can't be read (it exited mid-scan) is
   skipped; a failed name read shows its pid; a failed folder read is "folder gone", as above.
 - **Cost:** one scan of 870 processes measured 5.6 ms on a 12-core Mac, 2026-11-26 (a probe; the
@@ -117,18 +119,23 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 
 ## The card
 
-- Title "Servers". Value "8 listening", "1 listening", "None listening"; detail "3 parent gone"
-  when any are, none otherwise. The "Not known yet" state until the first scan, then a new
-  informational tone, neither green nor red, with its own symbol (see "Shell changes").
+- Title "Servers". Value "8 listening", "1 listening", "None listening"; detail "3 orphaned"
+  when any are, none otherwise (owner chose "orphaned", 2026-11-26). The "Not known yet" state
+  until the first scan, then a new informational tone, neither green nor red, with its own symbol
+  (see "Shell changes").
 - A click on the card, or activating it with VoiceOver, shows the list. Its VoiceOver label
   names the value and the detail and says it opens the list.
 
 ## The list
 
-- **Replaces the cards and messages** in the panel; a Back control at its top returns to them. The
-  footer stays. The panel opens on the cards each time.
-- **Rows:** `:8000  python3  image-gen  10 h  ⚠`; the folder is its last component; the ⚠
-  symbol (with a help tag "The process that started it is gone") when its parent is gone.
+- **Replaces the cards and messages** in the panel; a header with a Back control and the title
+  "Servers" returns to them. The footer stays. The panel opens on the cards each time.
+- **Rows** (owner chose a table, 2026-11-26): one line per server under column titles Port,
+  Process, PID, Folder, Running and Orphaned: `:8000  python3  4242  image-gen  10 h  ⚠`; the
+  folder is its last component; the pid, beside the name, makes the process easy to find in
+  Activity Monitor; the ⚠ symbol (with a help tag "Orphaned: the process that started it has
+  exited") when its parent is gone. The panel widens for the list and narrows again on Back; the
+  cards keep their width.
 - **Parent gone** (owner chose the chain, 2026-11-26): agents start servers through a wrapper
   (`npm run dev`, `uv run`, a shell), and when the session ends the wrapper is handed to `launchd`
   (pid 1), not the server under it (checked on macOS 27, 2026-11-26: after the outer shell exited,
@@ -142,12 +149,26 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - **Order:** rows with ⚠ first, then by port, then by pid.
 - **Help tag and VoiceOver label** per row: port, process, pid, the full folder with the home
   directory written `~`, the listening addresses (two for a merged IPv4 and IPv6 row), time
-  running, and "parent process gone" when it applies.
-- **A click on a row** opens `http://localhost:<port>` with `NSWorkspace.shared.open`; a server
-  that isn't HTTP shows the browser's own error.
+  running in words ("10 hours"), and "orphaned" when it applies.
+- **A click on a cell** (owner chose it, 2026-11-27): the port copies `http://localhost:<port>`,
+  the name and the pid copy themselves, each showing "Copied" for a moment, and the folder
+  shows it in Finder (not when it is gone). The cell under the pointer is highlighted.
+- **Open in Browser**, from the row's menu, opens `http://localhost:<port>` with
+  `NSWorkspace.shared.open`; a server that isn't HTTP shows the browser's own error.
+- **A row's menu** (owner chose it, 2026-11-26), on right-click and on a … that shows at the
+  end of the row under the pointer: Open in Browser, Copy Link (`http://localhost:<port>`), Copy
+  PID, Show Folder in Finder (`NSWorkspace.activateFileViewerSelecting`, off when the folder is
+  gone), Stop Server… and Force Stop Server…. Activity Monitor has no URL scheme or scripting
+  dictionary, and its search doesn't match a pid (owner checked, 2026-11-27), so the app can't
+  open it on the process and the menu leaves it out.
+- **Stopping a server** (owner, 2026-11-27, reversing the app's rule for this list, since
+  Activity Monitor can't be opened on the process): Stop sends `SIGTERM`, Force Stop `SIGKILL`,
+  each with `kill(2)` after a dialog naming the process, port and pid. Right before sending, the
+  pid's start time must still be the scan's, since the list can be a scan old and pids are
+  reused; otherwise nothing is sent and the panel says the process had already exited. A refused
+  signal is reported too. The list scans again at once.
 - **Empty:** "No servers listening" in place of rows.
-- **Open Activity Monitor** at the list's foot, as in the message area, so a server can be
-  stopped there.
+- **Open Activity Monitor** at the list's foot, as in the message area.
 - **Parent gone is a hint, not a verdict:** a process that detaches on purpose also ends its
   chain at 1 with a folder: `ssh -f`, a daemon, and a `tmux` server, so a server in a `tmux` pane
   shows ⚠ while its session lives. Accepted (owner, 2026-11-26).
@@ -156,7 +177,8 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 
 - **On panel open:** one scan, for the card. Nothing while the panel is closed.
 - **While the list is shown:** every 2 s, on a timer of the module's own with at least 0.2 s
-  tolerance, armed when the list appears and stopped when it goes or the panel closes.
+  tolerance, armed when the list appears and stopped when it goes or the panel closes. A tick
+  while a scan still runs starts none, so slow scans don't stack up.
 - **Background priority:** each scan runs as a `.background` task, and its result is applied when
   it arrives, as system health's scans (the app's design, "Low priority"). A result from a scan
   older than the one applied is dropped.
@@ -168,7 +190,7 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - The panel gains a second view (the list) and a way back.
 - `PanelKit`'s card becomes clickable for a card that opens something, and keeps today's look
   for those that don't; `PanelTone` gains the informational tone and its symbol.
-- The fifth card makes the grid three rows, the last with one card; the cards keep one size.
+- The fifth card makes the grid three rows; the cards keep one size.
 - `PrinceDevToolsCore/Package.swift` gains the `LocalServers` library and `LocalServersTests`, and
   `PrinceDevTools/project.yml` the product.
 - The app's design is updated in the commits that build these: its target list (`SystemHealth`,
@@ -184,15 +206,19 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   forked workers on one socket as one row showing the oldest, two ports as two rows, the sort
   order; parent gone for a direct orphan, a wrapped one, a chain ending at an app in `/`, a chain
   ending at another user's process, a loop; a process failing mid-scan skipped, a stale scan
-  result dropped, the card's wording for 0, 1 and many. `PanelKit`: the clickable card and a
-  five-card `CardGrid`.
+  result dropped, the card's wording for 0, 1 and many; Stop sending its signal only while the
+  start time matches, never to a pid of 0 or below, an exited process read as changed, a refused
+  signal's error, and a real child process ended. `PanelKit`: the clickable card and a five-card
+  `CardGrid`.
 - **On a real Mac:** `python3 -m http.server 8765` in a folder shows its row within one scan; a
-  click opens it; the row gets ⚠ when the shell that started it is killed, and so does one started
-  as `sh -c "python3 -m http.server 8766; :" &` from a shell that then exits; deleting its folder
-  shows "folder gone" (only once the read fails, if the `lstat` was dropped); a server on a random
-  port (`python3 -m http.server 0`) or in `/tmp` does not show; a dual-stack listener shows its
-  address; no privacy prompt for a server in `~/Documents`; VoiceOver reads the card and a row; the
-  scan time on the Mac's real process count; the panel-closed budgets unchanged.
+  click on its port copies its link, and Open in Browser in its menu opens it; the row gets ⚠ when
+  the shell that started it is killed, and so does one started as
+  `sh -c "python3 -m http.server 8766; :" &` from a shell that then exits; deleting its folder
+  shows "folder gone"; a server on a random port (`python3 -m http.server 0`) or in `/tmp` does
+  not show; a dual-stack listener shows its address; Stop and Force Stop in its menu end it after
+  the confirmation, and a refusal shows its message; no privacy prompt for a server in
+  `~/Documents`; VoiceOver reads the card and a row; the scan time on the Mac's real process count;
+  the panel-closed budgets unchanged.
 
 ## Left to the builder
 

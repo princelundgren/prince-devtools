@@ -8,8 +8,8 @@ Everything in this repository is public: code, docs, commit messages, issues and
   A change that makes it untrue updates it in the same commit.
 - **Privacy is a product feature.** No telemetry, analytics, crash reporting or SDK that collects
   any of them. The app has no entitlements.
-- **No subprocesses.** The app reads the kernel through its APIs and opens other apps only through
-  `NSWorkspace`.
+- **No subprocesses.** The app reads the kernel through its APIs and the container runtimes through
+  their Docker Engine API sockets, and opens other apps only through `NSWorkspace`.
 - **Changes land through a pull request**, with signed commits.
 - **CI runs on the maintainer's self-hosted pool `prince-devtools-macos`**, a fresh macOS VM per
   job with Xcode 27.2 selected, no secrets and no local network. A fork's pull request runs on

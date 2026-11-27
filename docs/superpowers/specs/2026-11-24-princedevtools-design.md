@@ -40,12 +40,14 @@ single app must not become overwhelming (owner).
 
 - History, graphs or trends.
 - Notifications: the icon and the panel are the signal.
-- Stopping or killing processes from the panel (owner): Activity Monitor does that.
+- Stopping or killing processes from the panel (owner): Activity Monitor does that. The server
+  list is the one exception (owner, 2026-11-27), since Activity Monitor can't be opened with a
+  process selected: see `2026-11-26-localhost-servers-design.md`.
 - Grouping an agent with its helper processes; the culprit is one process by name.
 - Typed or pasted tools (JSON, Base64, JWT): they belong in a web tool, not a menu bar panel
   (owner).
 - The later tools; the shell only has to make adding one a new card, message source, Settings pane
-  and module.
+  and module, and for a tool with a list, the panel's second view.
 - Watching other users' processes: the process meter counts the current user's, which is the
   limit their agents hit.
 
@@ -87,15 +89,20 @@ single app must not become overwhelming (owner).
   `PrinceDevTools/project.yml` (XcodeGen) and `PrinceDevToolsCore/` (SwiftPM).
 - `PrinceDevToolsCore` targets: `SystemHealth` (readings, averaging, threshold evaluation, no
   AppKit), `PanelKit` (the tones, the card, message and footer views and the menu bar label shared
-  by every tool, and the Settings text for launch at login and the version). Tests per target.
+  by every tool, and the Settings text for launch at login and the version), `LocalServers` (the
+  localhost servers tool's list from libproc, its wording and its scans, no AppKit; its own
+  design is `2026-11-26-localhost-servers-design.md`), `Containers` (the containers tool's reads
+  of the Docker Engine API over each runtime's Unix socket, its wording and its scans, no AppKit;
+  its own design is `2026-11-27-containers-design.md`). Tests per target.
 - CI, CodeQL, the Claude review workflow, Dependabot and `release.yml` adapted from
   prince-clockin. CI and the release's test job run on the maintainer's self-hosted pool
   `prince-devtools-macos`, a fresh macOS VM per job, as prince-clockin's do (owner,
   2026-11-27): GitHub's Free plan runs 5 macOS jobs at a time for an account, and jobs waited up to
   42 minutes for one. A fork's pull request runs on GitHub's `xcode-27`, since the pool refuses
   its job. The release's other jobs and CodeQL stay on GitHub-hosted runners.
-- **No entitlements.** The app only opens other apps, so the release keeps prince-clockin's
-  signature and hardened-runtime checks and drops its Apple Events check.
+- **No entitlements.** The app opens other apps and connects to the container runtimes' Unix
+  sockets, neither of which needs one outside the App Sandbox, so the release keeps
+  prince-clockin's signature and hardened-runtime checks and drops its Apple Events check.
 - **Releases:** Developer ID signing, `notarytool`, Sparkle feed at
   `https://updates.princelundgren.com/princedevtools/appcast.xml` (the host's prefixes carry no
   hyphen). Sparkle settings as prince-clockin's `Info.plist`: signed feed required, verification
@@ -142,6 +149,10 @@ single app must not become overwhelming (owner).
 │ │ ● 70 GB free     │ │ ● 755/4000  │ │
 │ │                  │ │ ▬▬▬───────  │ │
 │ └──────────────────┘ └─────────────┘ │
+│ ┌─ Servers ────────┐ ┌─ Containers ┐ │
+│ │ ⓘ 3 listening    │ │ ⓘ 2 running │ │
+│ │ 1 orphaned       │ │ 1.2 GB      │ │
+│ └──────────────────┘ └─────────────┘ │
 ├──────────────────────────────────────┤
 │ ⚙                                  ⏻ │
 └──────────────────────────────────────┘
@@ -162,10 +173,17 @@ single app must not become overwhelming (owner).
   window (owner, 2026-11-26), so the card and its VoiceOver label say why it is red.
 - **Cards** in a two-column grid, all the same size: each as tall as the tallest, its lines at the
   top (owner, 2026-11-26). Each has a title, a status symbol and one or two lines. States:
-  green, red, memory's yellow, and **"Not known yet"** (neutral, never green or red) until a card
+  green, red, memory's yellow, **informational** (blue, neither green nor red: a card that
+  reports without judging) and **"Not known yet"** (neutral, never green or red) until a card
   has its first reading. Each state has its own symbol, never colour alone; colours use
   prince-clockin's tokens with their Increase Contrast variants. Each card is one VoiceOver
-  element naming its value and state.
+  element naming its value and state. A card that opens something on a click is a button,
+  looking as the others do, whose VoiceOver hint says what the click does.
+- **A card that opens a list** (the Servers card, `2026-11-26-localhost-servers-design.md`, and
+  the Containers card, `2026-11-27-containers-design.md`): a click shows the panel's second
+  view, the list in place of the messages and cards, under a header with Back and the tool's
+  title. The footer stays; the panel widens for the list, narrows again on Back, and opens on the
+  cards each time.
 - **The process card** shows the count over the limit with a thin linear gauge under it (owner:
   "a meter").
 - **Footer** as the Prince popover style: Settings left, Quit right. Sparkle's "update ready" row
@@ -310,12 +328,16 @@ Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
   swap and memory pressure for the cards, and the panel takes the same reading as it opens. It
   never writes the CPU ring, and scans processes only when a message appears or the panel opens
   on one (see Culprit); it stops when the panel closes. The 60 s tick, and its busy-process scan,
-  keep running beside it.
-- **No subprocesses**, no polling of other apps, and no per-process scan except the busy-process
-  one, which the tick runs only while the machine is busy enough for a process to be at its
-  clearing share (see "One busy process"). A scan of the user's 890 processes' CPU time measured
-  0.8 to 1.0 ms of CPU on a 12-core Mac, 2026-11-26, about 0.017 ms/s at one a minute; reading
-  every path as well took 2.3 to 3.8 ms, which would break the CPU budget below on a busy Mac.
+  keep running beside it. The servers tool scans once as the panel opens and every 2 s while its
+  list is shown (`2026-11-26-localhost-servers-design.md`, "When it scans"), and the containers
+  tool reads the runtimes' sockets on the same occasions, but never runs two scans at once
+  (`2026-11-27-containers-design.md`, "When it scans").
+- **No subprocesses**; while the panel is closed, no polling of other apps and no per-process
+  scan except the busy-process one, which the tick runs only while the machine is busy enough for a
+  process to be at its clearing share (see "One busy process"). A scan of the user's 890
+  processes' CPU time measured 0.8 to 1.0 ms of CPU on a 12-core Mac, 2026-11-26, about 0.017 ms/s
+  at one a minute; reading every path as well took 2.3 to 3.8 ms, which would break the CPU budget
+  below on a busy Mac.
 - **Low priority** (owner, 2026-11-26): every process scan, the busy-process one and the
   culprit's, runs as a `.background` priority task, so the system schedules it behind other apps'
   work and lowers its CPU and I/O priority. The result is applied when it arrives; nothing in the

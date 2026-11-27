@@ -60,7 +60,7 @@ struct ServerListView: View {
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 0) {
-                    ColumnTitles()
+                    ColumnTitles<ServerColumn>()
                     Divider()
                     if scan.servers.count > ListScrolling.rowsBeforeScrolling {
                         ScrollView { rowStack(scan) }
@@ -97,11 +97,9 @@ struct ServerListView: View {
     }
 }
 
-/// The table's columns: their titles, widths and alignment, shared by the title row and each row.
-private enum ServerColumn {
+/// The server table's columns, in order.
+private enum ServerColumn: ListColumn {
     case port, process, pid, folder, running, orphaned, more
-
-    static let spacing: CGFloat = 8
 
     var isClickable: Bool {
         switch self {
@@ -122,7 +120,6 @@ private enum ServerColumn {
         }
     }
 
-    /// A fixed width, or `nil` for a column that shares what is left.
     var width: CGFloat? {
         switch self {
         case .port: 52
@@ -144,29 +141,7 @@ private enum ServerColumn {
 }
 
 extension View {
-    fileprivate func column(_ column: ServerColumn) -> some View {
-        frame(minWidth: column.width, maxWidth: column.width ?? .infinity, alignment: column.alignment)
-    }
-}
-
-private struct ColumnTitles: View {
-    private static let columns: [ServerColumn] = [.port, .process, .pid, .folder, .running, .orphaned, .more]
-
-    var body: some View {
-        HStack(spacing: ServerColumn.spacing) {
-            ForEach(Self.columns, id: \.self) { column in
-                Text(column.title)
-                    .lineLimit(1)
-                    .padding(.horizontal, column.isClickable ? ListInset.cell : 0)
-                    .column(column)
-            }
-        }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, ListInset.row)
-        .padding(.bottom, 3)
-        .accessibilityHidden(true)
-    }
+    fileprivate func column(_ column: ServerColumn) -> some View { columnFrame(column) }
 }
 
 /// One server on one line, ⚠ when orphaned. Clicking the port copies its link, the name or pid

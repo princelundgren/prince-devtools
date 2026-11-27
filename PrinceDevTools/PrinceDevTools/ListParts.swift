@@ -17,6 +17,51 @@ enum ListInset {
     static let cell: CGFloat = 3
 }
 
+/// A table column: its title, width, alignment and whether its cells are buttons, shared by the
+/// title row and each row. The cases of a column type, in order, are the table's columns.
+protocol ListColumn: Hashable, CaseIterable where AllCases: RandomAccessCollection {
+    /// The title the title row shows, or "" for none.
+    var title: String { get }
+    /// Whether the column's cells are buttons, whose text sits ``ListInset/cell`` inside them.
+    var isClickable: Bool { get }
+    /// A fixed width, or `nil` for a column that shares what is left.
+    var width: CGFloat? { get }
+    /// Where a cell's content sits in the column.
+    var alignment: Alignment { get }
+    /// The space between columns, in the title row and each row.
+    static var spacing: CGFloat { get }
+}
+
+extension ListColumn {
+    static var spacing: CGFloat { 8 }
+}
+
+extension View {
+    /// Sizes and aligns a cell or a title to `column`.
+    func columnFrame(_ column: some ListColumn) -> some View {
+        frame(minWidth: column.width, maxWidth: column.width ?? .infinity, alignment: column.alignment)
+    }
+}
+
+/// A table's title row: one title for each of `Column`'s columns, hidden from VoiceOver.
+struct ColumnTitles<Column: ListColumn>: View {
+    var body: some View {
+        HStack(spacing: Column.spacing) {
+            ForEach(Column.allCases, id: \.self) { column in
+                Text(column.title)
+                    .lineLimit(1)
+                    .padding(.horizontal, column.isClickable ? ListInset.cell : 0)
+                    .columnFrame(column)
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, ListInset.row)
+        .padding(.bottom, 3)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Puts `string` on the general pasteboard as plain text, in place of what was there.
 func copyToPasteboard(_ string: String) {
     NSPasteboard.general.clearContents()

@@ -1,10 +1,11 @@
 ---
 status: building
-verified: 2026-11-26
+verified: 2026-11-27
 governs:
   - PrinceDevTools/**
   - PrinceDevToolsCore/**
   - .github/workflows/release.yml
+  - .github/workflows/ci.yml
 ---
 
 # PrinceDevTools: design
@@ -88,8 +89,11 @@ single app must not become overwhelming (owner).
   AppKit), `PanelKit` (the tones, the card, message and footer views and the menu bar label shared
   by every tool, and the Settings text for launch at login and the version). Tests per target.
 - CI, CodeQL, the Claude review workflow, Dependabot and `release.yml` adapted from
-  prince-clockin. CI and the release's test job run on GitHub-hosted macOS runners, as
-  prince-sleepless decided for a public repo.
+  prince-clockin. CI and the release's test job run on the maintainer's self-hosted pool
+  `prince-devtools-macos`, a fresh macOS VM per job, as prince-clockin's do (owner,
+  2026-11-27): GitHub's Free plan runs 5 macOS jobs at a time for an account, and jobs waited up to
+  42 minutes for one. A fork's pull request runs on GitHub's `xcode-27`, since the pool refuses
+  its job. The release's other jobs and CodeQL stay on GitHub-hosted runners.
 - **No entitlements.** The app only opens other apps, so the release keeps prince-clockin's
   signature and hardened-runtime checks and drops its Apple Events check.
 - **Releases:** Developer ID signing, `notarytool`, Sparkle feed at

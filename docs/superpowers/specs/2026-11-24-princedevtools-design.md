@@ -91,7 +91,9 @@ single app must not become overwhelming (owner).
   AppKit), `PanelKit` (the tones, the card, message and footer views and the menu bar label shared
   by every tool, and the Settings text for launch at login and the version), `LocalServers` (the
   localhost servers tool's list from libproc, its wording and its scans, no AppKit; its own
-  design is `2026-11-26-localhost-servers-design.md`). Tests per target.
+  design is `2026-11-26-localhost-servers-design.md`), `Containers` (the containers tool's reads
+  of the Docker Engine API over each runtime's Unix socket, its wording and its scans, no AppKit;
+  its own design is `2026-11-27-containers-design.md`). Tests per target.
 - CI, CodeQL, the Claude review workflow, Dependabot and `release.yml` adapted from
   prince-clockin. CI and the release's test job run on the maintainer's self-hosted pool
   `prince-devtools-macos`, a fresh macOS VM per job, as prince-clockin's do (owner,

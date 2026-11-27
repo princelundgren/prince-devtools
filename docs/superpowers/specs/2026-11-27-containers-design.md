@@ -1,6 +1,10 @@
 ---
-status: approved
+status: building
 verified: 2026-11-27
+governs:
+  - PrinceDevToolsCore/Sources/Containers/**
+  - PrinceDevToolsCore/Tests/ContainersTests/**
+  - PrinceDevTools/PrinceDevTools/Container*.swift
 ---
 
 # PrinceDevTools: containers
@@ -69,8 +73,16 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
 
 - **The active Docker context** also counts: `currentContext` in `~/.docker/config.json`, whose
   endpoint is `Endpoints.docker.Host` in `~/.docker/contexts/meta/<SHA-256 of its name>/meta.json`.
-  Only a `unix://` host. A missing or unreadable file means no context.
+  Only a `unix://` host with an absolute path. A missing or unreadable file means no context.
 - **`/var/run/docker.sock`** counts too, since Docker Desktop and OrbStack can link it to their own.
+- **Names from the disk** (Colima profiles, Podman machines, the context) have each control,
+  bidi-control, line-separator or paragraph-separator character replaced by U+FFFD and are cut
+  to 1,024 bytes, so a name can't move or hide text in the panel (this design's call).
+- **Only the user's own sockets:** a socket is read only if the user owns both its resolved file
+  and the folder that holds it (this design's call). On a shared Mac, `/var/run/docker.sock` can
+  link into another account's folder, where that account can swap the file, or hard-link the
+  user's own socket there and then swap it, to answer the app's requests. Every socket in the
+  table is under the user's home or `$TMPDIR`.
 - **One runtime per engine:** symlinks are resolved first, then each socket's `GET /info` `ID`
   ("unique identifier of the daemon", per the Engine API) is compared, so an engine served at two
   socket files is read once and its containers count once (this design's call). A socket from the

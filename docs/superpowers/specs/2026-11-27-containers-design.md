@@ -89,8 +89,8 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
   table keeps that table's name; any other is named after its context, or "Docker".
 - **`DOCKER_HOST` is ignored:** an app started from the Finder doesn't get the shell's environment
   (this design's call).
-- **Not running:** a socket file that is missing, or that refuses the connection, is a runtime
-  that's stopped. It is left out, with no error.
+- **Not running:** a socket file that is missing, isn't a socket, or refuses the connection, is a
+  runtime that's stopped. It is left out, with no error.
 - **Can't read:** a socket that accepts the connection but whose reads fail (a timeout, an error
   status, a response the app can't decode) is a runtime that runs and can't be read. It is never
   left out silently, since "None running" while containers run is the one wrong answer this tool

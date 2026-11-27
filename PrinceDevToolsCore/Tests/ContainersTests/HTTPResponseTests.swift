@@ -21,6 +21,14 @@ final class HTTPResponseTests: XCTestCase {
         XCTAssertEqual(try HTTPResponse.body(of: Data(response.utf8)), Data("OK".utf8))
     }
 
+    func testOtherTransferCodingFails() {
+        assertFails("HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n")
+    }
+
+    func testRepeatedTransferEncodingIsJoinedAndFails() {
+        assertFails("HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n")
+    }
+
     func testNon200Fails() {
         assertFails("HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\n\r\n{}")
     }

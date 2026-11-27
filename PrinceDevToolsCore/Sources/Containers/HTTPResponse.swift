@@ -6,7 +6,7 @@ enum HTTPResponse {
 
     /// The body of a complete response read to the connection's close: `Content-Length`,
     /// `Transfer-Encoding: chunked`, or neither (to the end). Throws `.failed` on a status other
-    /// than 200 or a malformed response.
+    /// than 200, any other transfer coding, or a malformed response.
     static func body(of response: Data) throws(SocketReadError) -> Data {
         guard let head = response.firstRange(of: headEnd) else {
             throw .failed("malformed response: no end of the header")
@@ -20,7 +20,8 @@ enum HTTPResponse {
 
         let fields = try headerFields(lines.dropFirst())
         let content = response[head.upperBound...]
-        if fields["transfer-encoding"]?.lowercased() == "chunked" {
+        if let encoding = fields["transfer-encoding"] {
+            guard encoding.lowercased() == "chunked" else { throw .failed("Transfer-Encoding \(encoding)") }
             return try joinedChunks(content)
         }
         if let declared = fields["content-length"] {

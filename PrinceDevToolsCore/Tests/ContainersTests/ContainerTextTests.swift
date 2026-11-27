@@ -9,10 +9,11 @@ final class ContainerTextTests: XCTestCase {
     private let mebibyte: UInt64 = 1 << 20
 
     private func container(
-        name: String = "web", memoryBytes: UInt64? = nil, upFor seconds: TimeInterval = 3 * 3600 + 59 * 60
+        name: String = "web", image: String = "nginx:latest", memoryBytes: UInt64? = nil,
+        upFor seconds: TimeInterval = 3 * 3600 + 59 * 60
     ) -> Container {
         Container(
-            id: name, name: name, image: "nginx:latest", runtime: "OrbStack", created: now - seconds,
+            id: name, name: name, image: image, runtime: "OrbStack", created: now - seconds,
             memoryBytes: memoryBytes)
     }
 
@@ -106,6 +107,24 @@ final class ContainerTextTests: XCTestCase {
         XCTAssertEqual(row.memory, memory(120 * mebibyte))
         XCTAssertEqual(row.spokenMemory, memory(120 * mebibyte))
         XCTAssertEqual(row.description, "web, nginx:latest, OrbStack, up 3 hours, \(memory(120 * mebibyte))")
+    }
+
+    func testRowShowsAnImageWithoutItsDigestAndCopiesTheFullReference() {
+        let digest = "sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06"
+        func row(_ image: String) -> ContainerRowText {
+            ContainerText.row(container(image: image), now: now, locale: english)
+        }
+
+        let tagged = row("prom/prometheus:v3.16.0@\(digest)")
+        XCTAssertEqual(tagged.image, "prom/prometheus:v3.16.0")
+        XCTAssertEqual(tagged.imageReference, "prom/prometheus:v3.16.0@\(digest)")
+        XCTAssertEqual(tagged.copyImage, "Copy prom/prometheus:v3.16.0 with its digest")
+        XCTAssertEqual(row("nginx:latest").copyImage, "Copy nginx:latest")
+        XCTAssertEqual(tagged.description, "web, prom/prometheus:v3.16.0, OrbStack, up 3 hours, memory unknown")
+        XCTAssertEqual(row("alpine@\(digest)").image, "alpine")
+        XCTAssertEqual(row(digest).image, digest)
+        XCTAssertEqual(row(digest).imageReference, digest)
+        XCTAssertEqual(row(digest).copyImage, "Copy \(digest)")
     }
 
     func testRowWithUnknownMemoryShowsADashAndSpeaksIt() {

@@ -150,6 +150,9 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
   call: the question is where the RAM goes).
 - **A click on the name or image copies it,** with the "Copied" confirmation, as Servers' cells.
   No row menu.
+- **The image is shown without its digest,** as `docker ps` shows it (`prom/prometheus:v3.16.0`,
+  not `…@sha256:…`), since the cell's truncation otherwise hides the tag; a click copies the whole
+  reference (owner, 2026-11-27).
 - **Empty:** "No containers running", unless no runtime was read and one couldn't be; then only
   the lines naming the runtimes it couldn't read, as the card says "Can't read".
 - **Each runtime the app can't read** gets a line under the table naming it: "Couldn't read Podman".
@@ -180,8 +183,8 @@ flight, within about 70 s.
   once, two sockets with one engine `ID` as one, a context socket, a `tcp://` context skipped),
   a refused socket left out and a failing one shown as unreadable on the card and the list, the
   memory figure on cgroups v1 and v2, failed stats shown as "—" and left out of the total, a
-  runtime failing midway, the card's wording for 0, 1 and many, the sort by memory, and no second
-  scan started while one runs.
+  runtime failing midway, the card's wording for 0, 1 and many, the sort by memory, an image shown
+  without its digest, and no second scan started while one runs.
 - **On a real Mac:** with OrbStack running and `docker run -d nginx`, the card and row show it
   within one scan, and its memory is within a few percent of `docker stats --no-stream`; with
   OrbStack stopped, the card says "None running" and OrbStack stays stopped; two runtimes running

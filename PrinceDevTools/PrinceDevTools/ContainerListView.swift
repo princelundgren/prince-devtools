@@ -103,7 +103,7 @@ private struct ContainerRow: View {
                 Text(text.name).lineLimit(1)
             }
             .column(.name)
-            ActionCell(help: "Copy \(text.image)", confirms: true, action: { copyToPasteboard(text.image) }) {
+            ActionCell(help: text.copyImage, confirms: true, action: { copyToPasteboard(text.imageReference) }) {
                 Text(text.image).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             .column(.image)

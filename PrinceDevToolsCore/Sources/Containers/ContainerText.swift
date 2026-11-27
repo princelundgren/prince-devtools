@@ -11,7 +11,13 @@ public struct ContainerCard: Equatable, Sendable {
 /// One row's strings.
 public struct ContainerRowText: Equatable, Sendable {
     public let name: String
+    /// The image without its digest, as `docker ps` shows it: `prom/prometheus:v3.16.0`.
     public let image: String
+    /// The image as the engine names it, digest included, for copying.
+    public let imageReference: String
+    /// The image cell's help tag and VoiceOver label: "Copy nginx:latest", with "with its digest"
+    /// when the copy holds one, so VoiceOver never reads out its 64 hex digits.
+    public let copyImage: String
     public let runtime: String
     /// "59 min", "10 h", "3 d", rounded down.
     public let up: String
@@ -55,11 +61,14 @@ public enum ContainerText {
         let (up, spokenUp) = up(since: container.created, now: now, locale: locale)
         let known = container.memoryBytes.map { Self.memory($0, locale: locale) }
         let spokenMemory = known ?? spokenUnknownMemory
-        let description = [container.name, container.image, container.runtime, "up \(spokenUp)", spokenMemory]
+        let image = withoutDigest(container.image)
+        let copyImage = image == container.image ? "Copy \(image)" : "Copy \(image) with its digest"
+        let description = [container.name, image, container.runtime, "up \(spokenUp)", spokenMemory]
             .joined(separator: ", ")
         return ContainerRowText(
-            name: container.name, image: container.image, runtime: container.runtime, up: up, spokenUp: spokenUp,
-            memory: known ?? unknownMemory, spokenMemory: spokenMemory, description: description)
+            name: container.name, image: image, imageReference: container.image, copyImage: copyImage,
+            runtime: container.runtime, up: up, spokenUp: spokenUp, memory: known ?? unknownMemory,
+            spokenMemory: spokenMemory, description: description)
     }
 
     /// "No containers running" for an empty scan, or `nil` when no runtime was read and one
@@ -92,6 +101,12 @@ public enum ContainerText {
             : minutes < 24 * 60 ? (minutes / 60, "h", "hour") : (minutes / (24 * 60), "d", "day")
         let number = integer(count, locale: locale)
         return ("\(number) \(symbol)", "\(number) \(unit)\(count == 1 ? "" : "s")")
+    }
+
+    /// `name[:tag]@digest` without `@digest`; an image ID, which has no `@`, as it is.
+    private static func withoutDigest(_ image: String) -> String {
+        guard let at = image.firstIndex(of: "@"), at > image.startIndex else { return image }
+        return String(image[..<at])
     }
 
     private static func saturatingSum(_ bytes: [UInt64]) -> UInt64 {

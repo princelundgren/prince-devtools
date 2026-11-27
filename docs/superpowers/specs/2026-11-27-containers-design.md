@@ -157,8 +157,12 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
 ## When it scans
 
 As the servers: one scan when the panel opens, for the card; every 2 s while the list is shown;
-nothing while the panel is closed. Each scan runs at background priority, and a result older than
-the one applied is dropped. The runtimes are read in parallel.
+nothing while the panel is closed. Unlike the servers, at most one scan runs at a time: an opening,
+a showing of the list or a tick while a scan runs starts none, and that scan's result is applied,
+so a slow runtime never has two scans reading it (this design's call). Each scan runs at
+background priority, and the runtimes are read in parallel. A scan still running when the panel
+closes finishes and is applied: with 2 s per request, 500 containers at most and 16 stats in
+flight, within about 70 s.
 
 ## Shell changes
 
@@ -173,8 +177,8 @@ the one applied is dropped. The runtimes are read in parallel.
   once, two sockets with one engine `ID` as one, a context socket, a `tcp://` context skipped),
   a refused socket left out and a failing one shown as unreadable on the card and the list, the
   memory figure on cgroups v1 and v2, failed stats shown as "—" and left out of the total, a
-  runtime failing midway, the card's wording for 0, 1 and many, the sort by memory, and a stale
-  scan dropped.
+  runtime failing midway, the card's wording for 0, 1 and many, the sort by memory, and no second
+  scan started while one runs.
 - **On a real Mac:** with OrbStack running and `docker run -d nginx`, the card and row show it
   within one scan, and its memory is within a few percent of `docker stats --no-stream`; with
   OrbStack stopped, the card says "None running" and OrbStack stays stopped; two runtimes running

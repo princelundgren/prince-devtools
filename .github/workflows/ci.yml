@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_call:
 
+concurrency:
+  # A pull request's newer push cancels its older run; other events each get their own group.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

@@ -29,6 +29,14 @@ public struct ServerRowText: Equatable, Sendable {
     public let description: String
 }
 
+/// The dialog before a server is stopped.
+public struct StopConfirmation: Equatable, Sendable {
+    public let title: String
+    public let message: String
+    /// The destructive button's title.
+    public let button: String
+}
+
 /// The localhost servers tool's wording. Counts and times are formatted for `locale`; ports and
 /// pids are not, and the words are English.
 public enum ServerText {
@@ -59,6 +67,32 @@ public enum ServerText {
         return ServerRowText(
             port: ":\(server.port)", name: name, folder: shortFolder(server), pid: "\(server.pid)", running: running,
             spokenRunning: spokenRunning, description: description)
+    }
+
+    /// The question asked before stopping `server`.
+    public static func stopConfirmation(_ server: Server, with signal: StopSignal) -> StopConfirmation {
+        let name = server.name ?? "pid \(server.pid)"
+        return switch signal {
+        case .terminate:
+            StopConfirmation(
+                title: "Stop \(name) on port \(server.port)?",
+                message: "PID \(server.pid). It can clean up before it quits.", button: "Stop")
+        case .kill:
+            StopConfirmation(
+                title: "Force stop \(name) on port \(server.port)?",
+                message: "PID \(server.pid). It stops at once, without cleaning up, and may lose unsaved work.",
+                button: "Force Stop")
+        }
+    }
+
+    /// What went wrong stopping the server on `port`; `nil` when the signal was sent.
+    public static func stopFailure(_ result: StopResult, port: UInt16) -> String? {
+        switch result {
+        case .sent: nil
+        case .processChanged: "The process on port \(port) had already exited, so nothing was stopped."
+        case .failed(EPERM): "macOS didn't allow stopping the process on port \(port)."
+        case .failed(let error): "The process on port \(port) couldn't be stopped: \(String(cString: strerror(error)))."
+        }
     }
 
     private static func card(value: String, detail: String?) -> ServerCard {

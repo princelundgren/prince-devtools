@@ -181,6 +181,24 @@ final class ServerMonitorTests: XCTestCase {
         monitor.hideList()
     }
 
+    func testStopReportsItsResultAndScansAgain() async {
+        let fake = FakeScanner()
+        let monitor = makeMonitor(fake)
+        monitor.panelOpened()
+        await monitor.scansFinished()
+        let callsBefore = fake.calls
+        // Not pid 10's start time, so the stop is refused before any signal is sent.
+        let server = Server(
+            pid: 10, name: nil, port: 3000, addresses: ["::"], folderPath: nil, isFolderGone: true,
+            startTime: FakeProcesses.epoch - 60, isParentGone: false)
+
+        let result = monitor.stop(server, with: .terminate)
+        await monitor.scansFinished()
+
+        XCTAssertEqual(result, .processChanged)
+        XCTAssertEqual(fake.calls, callsBefore + 1)
+    }
+
     func testScansRunAtBackgroundPriority() async {
         let fake = FakeScanner()
         let monitor = makeMonitor(fake)

@@ -33,8 +33,6 @@ looked up, not an alarm.
 
 ## Non-goals
 
-- **Stopping a server from the panel** (owner kept the app's rule, 2026-11-26): Activity Monitor
-  does that. The list keeps an Open Activity Monitor button.
 - **Alerts:** no message, no red or yellow card, no change to the menu bar icon. A running server
   is not a fault (this design's call).
 - Linking a server to the agent session that started it, its git branch, or its memory and CPU.
@@ -61,7 +59,7 @@ looked up, not an alarm.
 2. **Adopt WhatThePort** (`tomjohndesign/what-the-port`, MIT, Swift, active), and drop the tool.
    It already does this and more (the agent session behind a server, its branch, leak warnings,
    stopping), but it is a second menu bar app, which PrinceDevTools exists to replace, and it runs
-   `/usr/sbin/lsof`, notifies, and stops processes, each against this app's rules. Rejected. Its
+   `/usr/sbin/lsof` and notifies, both against this app's rules. Rejected. Its
    code may be read for reference, with credit for anything taken. manfath (`Dnymte/manfath`, MIT)
    is the same shape, also on `lsof`.
 3. **Port WhatThePort's code:** its core parses `lsof` output, which the no-subprocess rule
@@ -152,9 +150,14 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   running in words ("10 hours"), and "orphaned" when it applies.
 - **A click on a row** opens `http://localhost:<port>` with `NSWorkspace.shared.open`; a server
   that isn't HTTP shows the browser's own error.
+- **Stopping a server** (owner, 2026-11-27, reversing the app's rule for this list, since
+  Activity Monitor can't be opened on the process): Stop sends `SIGTERM`, Force Stop `SIGKILL`,
+  each with `kill(2)` after a dialog naming the process, port and pid. Right before sending, the
+  pid's start time must still be the scan's, since the list can be a scan old and pids are
+  reused; otherwise nothing is sent and the panel says the process had already exited. A refused
+  signal is reported too. The list scans again at once.
 - **Empty:** "No servers listening" in place of rows.
-- **Open Activity Monitor** at the list's foot, as in the message area, so a server can be
-  stopped there.
+- **Open Activity Monitor** at the list's foot, as in the message area.
 - **Parent gone is a hint, not a verdict:** a process that detaches on purpose also ends its
   chain at 1 with a folder: `ssh -f`, a daemon, and a `tmux` server, so a server in a `tmux` pane
   shows ⚠ while its session lives. Accepted (owner, 2026-11-26).
@@ -192,8 +195,10 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   forked workers on one socket as one row showing the oldest, two ports as two rows, the sort
   order; parent gone for a direct orphan, a wrapped one, a chain ending at an app in `/`, a chain
   ending at another user's process, a loop; a process failing mid-scan skipped, a stale scan
-  result dropped, the card's wording for 0, 1 and many. `PanelKit`: the clickable card and a
-  five-card `CardGrid`.
+  result dropped, the card's wording for 0, 1 and many; Stop sending its signal only while the
+  start time matches, never to a pid of 0 or below, an exited process read as changed, a refused
+  signal's error, and a real child process ended. `PanelKit`: the clickable card and a five-card
+  `CardGrid`.
 - **On a real Mac:** `python3 -m http.server 8765` in a folder shows its row within one scan; a
   click opens it; the row gets ⚠ when the shell that started it is killed, and so does one started
   as `sh -c "python3 -m http.server 8766; :" &` from a shell that then exits; deleting its folder

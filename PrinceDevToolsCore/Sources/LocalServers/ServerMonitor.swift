@@ -70,6 +70,14 @@ public final class ServerMonitor {
         listTimer = nil
     }
 
+    /// Asks `server` to stop if its pid is still the process the scan read (``ServerStop``), then
+    /// scans again at once; the list's timer catches a process that exits later.
+    public func stop(_ server: Server, with signal: StopSignal) -> StopResult {
+        let result = ServerStop.stop(server, with: signal, source: source)
+        startScan()
+        return result
+    }
+
     func scansFinished() async {
         for scan in scansInFlight.values { await scan.value }
     }

@@ -40,7 +40,9 @@ single app must not become overwhelming (owner).
 
 - History, graphs or trends.
 - Notifications: the icon and the panel are the signal.
-- Stopping or killing processes from the panel (owner): Activity Monitor does that.
+- Stopping or killing processes from the panel (owner): Activity Monitor does that. The server
+  list is the one exception (owner, 2026-11-27), since Activity Monitor can't be opened with a
+  process selected: see `2026-11-26-localhost-servers-design.md`.
 - Grouping an agent with its helper processes; the culprit is one process by name.
 - Typed or pasted tools (JSON, Base64, JWT): they belong in a web tool, not a menu bar panel
   (owner).

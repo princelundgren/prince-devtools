@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import LocalServers
@@ -117,6 +118,34 @@ final class ServerTextTests: XCTestCase {
 
     func testHomeFolderItselfReadsTilde() {
         XCTAssertTrue(row(server(folderPath: "/Users/u")).description.contains(", ~, "))
+    }
+
+    func testStopConfirmationNamesTheServer() {
+        XCTAssertEqual(
+            ServerText.stopConfirmation(server(pid: 12345, port: 8000), with: .terminate),
+            StopConfirmation(
+                title: "Stop python3 on port 8000?", message: "PID 12345. It can clean up before it quits.",
+                button: "Stop"))
+    }
+
+    func testForceStopConfirmationWarnsOfLostWork() {
+        let confirmation = ServerText.stopConfirmation(server(name: nil), with: .kill)
+
+        XCTAssertEqual(confirmation.title, "Force stop pid 4242 on port 8000?")
+        XCTAssertEqual(confirmation.message, "PID 4242. It stops at once, without cleaning up, and may lose unsaved work.")
+        XCTAssertEqual(confirmation.button, "Force Stop")
+    }
+
+    func testStopFailures() {
+        XCTAssertNil(ServerText.stopFailure(.sent, port: 8000))
+        XCTAssertEqual(
+            ServerText.stopFailure(.processChanged, port: 8000),
+            "The process on port 8000 had already exited, so nothing was stopped.")
+        XCTAssertEqual(
+            ServerText.stopFailure(.failed(EPERM), port: 8000), "macOS didn't allow stopping the process on port 8000.")
+        XCTAssertEqual(
+            ServerText.stopFailure(.failed(EIO), port: 8000),
+            "The process on port 8000 couldn't be stopped: Input/output error.")
     }
 
     func testFolderOutsideHomeKeepsItsFullPath() {

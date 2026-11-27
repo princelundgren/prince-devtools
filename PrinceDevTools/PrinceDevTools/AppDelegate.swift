@@ -1,14 +1,16 @@
 import AppKit
+import LocalServers
 import SwiftUI
 import SystemHealth
 
-/// Owns the app's AppKit side: the health monitor and the system events it follows, the status
-/// item, the panel's popover, the Settings window and the hidden main menu.
+/// Owns the app's AppKit side: the health and server monitors, the system events they follow, the
+/// status item, the panel's popover, the Settings window and the hidden main menu.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private static let settingsFrameName = "Settings"
 
     private let monitor: HealthMonitor
+    private let servers: ServerMonitor
     private let updater: Updater
     private let popover = NSPopover()
     private var statusItem: StatusItemController?
@@ -20,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     override init() {
         monitor = HealthMonitor()
+        servers = ServerMonitor(source: .live)
         updater = Updater()
         super.init()
     }
@@ -84,7 +87,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func setUpPopover() {
         popover.behavior = .transient
-        let panel = PanelView(monitor: monitor, updater: updater, openSettings: { [weak self] in self?.showSettings() })
+        let panel = PanelView(
+            monitor: monitor, servers: servers, updater: updater,
+            openSettings: { [weak self] in self?.showSettings() })
         let hosting = NSHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
         popover.contentViewController = hosting
@@ -93,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func popoverWillShow(_ notification: Notification) {
         monitor.panelOpened()
+        servers.panelOpened()
     }
 
     /// Every close passes here: a click outside, the icon and Settings alike.
@@ -100,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         outsideClickMonitor = nil
         monitor.panelClosed()
+        servers.panelClosed()
     }
 
     private func togglePanel() {

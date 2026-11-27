@@ -1,6 +1,6 @@
 ---
 status: building
-verified: 2026-11-26
+verified: 2026-11-27
 governs:
   - PrinceDevToolsCore/Sources/LocalServers/**
   - PrinceDevToolsCore/Tests/LocalServersTests/**
@@ -25,8 +25,8 @@ looked up, not an alarm.
 - **A Servers card** in the panel's grid: how many servers listen, and how many have lost the
   process that started them. A click on it shows the list (owner chose a card that opens a list,
   for a glance first and the detail a click away).
-- **A row per server:** port, process name, folder, time running, and a mark when its parent
-  process is gone. A click opens `http://localhost:<port>` in the default browser.
+- **A row per server:** port, process name, pid, folder, time running, and a mark when its parent
+  process is gone. Its menu opens `http://localhost:<port>` in the default browser.
 - **Only the servers someone started** (owner chose the fixed-ports and home-folder filters): see
   "Which listeners show".
 - As cheap as the rest of the app: no scan while the panel is closed.
@@ -106,9 +106,8 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   the read fails with `ENOENT` (older leftovers, which `lsof` can't read either), or it still
   returns the old path (a folder deleted seconds before). So "folder gone" is a failed read, an
   empty path, or an `lstat` of the path that fails with `ENOENT` or finds another inode or device.
-  - Unverified: an `lstat` under Desktop, Documents or Downloads may raise a privacy (TCC) prompt
-    for an app without its grants. The builder checks with a fresh app identity; if it prompts,
-    the `lstat` goes, and "folder gone" comes only from a failed read.
+  - No privacy (TCC) prompt: an `lstat` of a server's folder in `~/Documents` raised none for a
+    fresh, unsigned app identity (macOS 27, 2026-11-27).
 - **Start time and parent:** `proc_pidinfo(PROC_PIDTBSDINFO)` → `pbi_start_tvsec` and `pbi_ppid`,
   for each server's process, then up its chain only as far as the walk climbs (see "Parent gone"),
   not for every process. Each walked process's folder is read with its record, by
@@ -129,11 +128,14 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 
 ## The list
 
-- **Replaces the cards and messages** in the panel; a Back control at its top returns to them. The
-  footer stays. The panel opens on the cards each time.
-- **Rows:** `:8000  python3  image-gen  10 h  ⚠`; the folder is its last component; the ⚠
-  symbol (with a help tag "Orphaned: the process that started it has exited") when its parent is
-  gone.
+- **Replaces the cards and messages** in the panel; a header with a Back control and the title
+  "Servers" returns to them. The footer stays. The panel opens on the cards each time.
+- **Rows** (owner chose a table, 2026-11-26): one line per server under column titles Port,
+  Process, PID, Folder, Running and Orphaned: `:8000  python3  4242  image-gen  10 h  ⚠`; the
+  folder is its last component; the pid, beside the name, makes the process easy to find in
+  Activity Monitor; the ⚠ symbol (with a help tag "Orphaned: the process that started it has
+  exited") when its parent is gone. The panel widens for the list and narrows again on Back; the
+  cards keep their width.
 - **Parent gone** (owner chose the chain, 2026-11-26): agents start servers through a wrapper
   (`npm run dev`, `uv run`, a shell), and when the session ends the wrapper is handed to `launchd`
   (pid 1), not the server under it (checked on macOS 27, 2026-11-26: after the outer shell exited,
@@ -148,8 +150,17 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - **Help tag and VoiceOver label** per row: port, process, pid, the full folder with the home
   directory written `~`, the listening addresses (two for a merged IPv4 and IPv6 row), time
   running in words ("10 hours"), and "orphaned" when it applies.
-- **A click on a row** opens `http://localhost:<port>` with `NSWorkspace.shared.open`; a server
-  that isn't HTTP shows the browser's own error.
+- **A click on a cell** (owner chose it, 2026-11-27): the port copies `http://localhost:<port>`,
+  the name and the pid copy themselves, each showing "Copied" for a moment, and the folder
+  shows it in Finder (not when it is gone). The cell under the pointer is highlighted.
+- **Open in Browser**, from the row's menu, opens `http://localhost:<port>` with
+  `NSWorkspace.shared.open`; a server that isn't HTTP shows the browser's own error.
+- **A row's menu** (owner chose it, 2026-11-26), on right-click and on a … that shows at the
+  end of the row under the pointer: Open in Browser, Copy Link (`http://localhost:<port>`), Copy
+  PID, Show Folder in Finder (`NSWorkspace.activateFileViewerSelecting`, off when the folder is
+  gone), Stop Server… and Force Stop Server…. Activity Monitor has no URL scheme or scripting
+  dictionary, and its search doesn't match a pid (owner checked, 2026-11-27), so the app can't
+  open it on the process and the menu leaves it out.
 - **Stopping a server** (owner, 2026-11-27, reversing the app's rule for this list, since
   Activity Monitor can't be opened on the process): Stop sends `SIGTERM`, Force Stop `SIGKILL`,
   each with `kill(2)` after a dialog naming the process, port and pid. Right before sending, the
@@ -200,12 +211,14 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
   signal's error, and a real child process ended. `PanelKit`: the clickable card and a five-card
   `CardGrid`.
 - **On a real Mac:** `python3 -m http.server 8765` in a folder shows its row within one scan; a
-  click opens it; the row gets ⚠ when the shell that started it is killed, and so does one started
-  as `sh -c "python3 -m http.server 8766; :" &` from a shell that then exits; deleting its folder
-  shows "folder gone" (only once the read fails, if the `lstat` was dropped); a server on a random
-  port (`python3 -m http.server 0`) or in `/tmp` does not show; a dual-stack listener shows its
-  address; no privacy prompt for a server in `~/Documents`; VoiceOver reads the card and a row; the
-  scan time on the Mac's real process count; the panel-closed budgets unchanged.
+  click on its port copies its link, and Open in Browser in its menu opens it; the row gets ⚠ when
+  the shell that started it is killed, and so does one started as
+  `sh -c "python3 -m http.server 8766; :" &` from a shell that then exits; deleting its folder
+  shows "folder gone"; a server on a random port (`python3 -m http.server 0`) or in `/tmp` does
+  not show; a dual-stack listener shows its address; Stop and Force Stop in its menu end it after
+  the confirmation, and a refusal shows its message; no privacy prompt for a server in
+  `~/Documents`; VoiceOver reads the card and a row; the scan time on the Mac's real process count;
+  the panel-closed budgets unchanged.
 
 ## Left to the builder
 

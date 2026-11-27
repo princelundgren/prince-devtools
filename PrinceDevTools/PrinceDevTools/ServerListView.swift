@@ -8,9 +8,6 @@ import SwiftUI
 /// actions on its cells and its menu, under a header with Back and above Open Activity Monitor.
 /// A stop asks first, and says so when it fails.
 struct ServerListView: View {
-    /// More rows than this scroll, so the panel stays on screen.
-    private static let rowsBeforeScrolling = 12
-    private static let scrollingHeight: CGFloat = 300
     private static let logger = Logger(subsystem: "com.princelundgren.princedevtools", category: "ServerList")
 
     let monitor: ServerMonitor
@@ -25,7 +22,7 @@ struct ServerListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            header
+            ListHeader(title: ServerText.title, back: monitor.hideList)
             rows
             Button("Open Activity Monitor", action: ActivityMonitor.open)
                 .buttonStyle(.bordered)
@@ -56,21 +53,6 @@ struct ServerListView: View {
         Binding(get: { stopFailure != nil }, set: { if !$0 { stopFailure = nil } })
     }
 
-    private var header: some View {
-        ZStack {
-            Text(ServerText.title)
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            Button(action: monitor.hideList) {
-                Label("Back", systemImage: "chevron.backward")
-            }
-            .buttonStyle(BackButtonStyle())
-            .padding(.leading, ServerColumn.rowInset + ServerColumn.cellInset)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.bottom, 4)
-    }
-
     @ViewBuilder private var rows: some View {
         if let scan = monitor.scan {
             if scan.servers.isEmpty {
@@ -80,9 +62,9 @@ struct ServerListView: View {
                 VStack(spacing: 0) {
                     ColumnTitles()
                     Divider()
-                    if scan.servers.count > Self.rowsBeforeScrolling {
+                    if scan.servers.count > ListScrolling.rowsBeforeScrolling {
                         ScrollView { rowStack(scan) }
-                            .frame(height: Self.scrollingHeight)
+                            .frame(height: ListScrolling.height)
                     } else {
                         rowStack(scan)
                     }
@@ -120,9 +102,6 @@ private enum ServerColumn {
     case port, process, pid, folder, running, orphaned, more
 
     static let spacing: CGFloat = 8
-    static let rowInset: CGFloat = 6
-    /// How far a clickable cell's text sits inside its highlight.
-    static let cellInset: CGFloat = 3
 
     var isClickable: Bool {
         switch self {
@@ -178,13 +157,13 @@ private struct ColumnTitles: View {
             ForEach(Self.columns, id: \.self) { column in
                 Text(column.title)
                     .lineLimit(1)
-                    .padding(.horizontal, column.isClickable ? ServerColumn.cellInset : 0)
+                    .padding(.horizontal, column.isClickable ? ListInset.cell : 0)
                     .column(column)
             }
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, ServerColumn.rowInset)
+        .padding(.horizontal, ListInset.row)
         .padding(.bottom, 3)
         .accessibilityHidden(true)
     }
@@ -210,11 +189,11 @@ private struct ServerRow: View {
                 Text(text.port).monospacedDigit()
             }
             .column(.port)
-            ActionCell(help: "Copy \(text.name)", confirms: true, action: { copy(text.name) }) {
+            ActionCell(help: "Copy \(text.name)", confirms: true, action: { copyToPasteboard(text.name) }) {
                 Text(text.name).lineLimit(1)
             }
             .column(.process)
-            ActionCell(help: "Copy PID \(text.pid)", confirms: true, action: { copy(text.pid) }) {
+            ActionCell(help: "Copy PID \(text.pid)", confirms: true, action: { copyToPasteboard(text.pid) }) {
                 Text(text.pid).foregroundStyle(.secondary).monospacedDigit()
             }
             .column(.pid)
@@ -250,7 +229,7 @@ private struct ServerRow: View {
             .column(.more)
         }
         .padding(.vertical, 2)
-        .padding(.horizontal, ServerColumn.rowInset)
+        .padding(.horizontal, ListInset.row)
         .contentShape(Rectangle())
         .help(text.description)
         .onHover { isHovered = $0 }
@@ -271,7 +250,7 @@ private struct ServerRow: View {
             .disabled(link == nil)
         Button("Copy Link", action: copyLink)
             .disabled(link == nil)
-        Button("Copy PID") { copy(text.pid) }
+        Button("Copy PID") { copyToPasteboard(text.pid) }
         Button("Show Folder in Finder", action: showFolder)
             .disabled(folder == nil)
         Divider()
@@ -284,105 +263,10 @@ private struct ServerRow: View {
     }
 
     private func copyLink() {
-        if let link { copy(link.absoluteString) }
+        if let link { copyToPasteboard(link.absoluteString) }
     }
 
     private func showFolder() {
         if let folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
-    }
-
-    private func copy(_ string: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(string, forType: .string)
-    }
-}
-
-/// A table cell that does something when clicked: highlighted under the pointer, its help tag as
-/// its VoiceOver label, and "Copied" in its place for a moment after a copy.
-private struct ActionCell<Label: View>: View {
-    private static var confirmationTime: Duration { .seconds(1.2) }
-
-    let help: String
-    var isEnabled = true
-    let confirms: Bool
-    let action: () -> Void
-    @ViewBuilder let label: Label
-    @State private var isConfirming = false
-    /// Counts the copies, so each one restarts the confirmation's timer.
-    @State private var copies = 0
-
-    var body: some View {
-        Button {
-            action()
-            if confirms {
-                isConfirming = true
-                copies += 1
-            }
-        } label: {
-            ZStack(alignment: .leading) {
-                label.opacity(isConfirming ? 0 : 1)
-                if isConfirming {
-                    Text("Copied").foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-        }
-        .buttonStyle(HighlightButtonStyle())
-        .disabled(!isEnabled)
-        .help(help)
-        .accessibilityLabel(help)
-        .task(id: copies) {
-            guard isConfirming, (try? await Task.sleep(for: Self.confirmationTime)) != nil else { return }
-            isConfirming = false
-        }
-    }
-}
-
-/// A plain button highlighted under the pointer and darker while pressed, with the pointing hand
-/// while enabled: the table's cells.
-private struct HighlightButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HighlightButton(configuration: configuration)
-    }
-}
-
-private struct HighlightButton: View {
-    let configuration: ButtonStyleConfiguration
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .padding(.vertical, 2)
-            .padding(.horizontal, ServerColumn.cellInset)
-            .background {
-                if isEnabled && (isHovered || configuration.isPressed) {
-                    RoundedRectangle(cornerRadius: 4).fill(configuration.isPressed ? .tertiary : .quaternary)
-                }
-            }
-            .contentShape(Rectangle())
-            .onHover { isHovered = $0 }
-            .pointerStyle(isEnabled ? .link : nil)
-    }
-}
-
-/// The header's Back: secondary text that turns primary under the pointer and dims while pressed,
-/// with no highlight behind it.
-private struct BackButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        BackButton(configuration: configuration)
-    }
-}
-
-private struct BackButton: View {
-    let configuration: ButtonStyleConfiguration
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .foregroundStyle(isHovered ? .primary : .secondary)
-            .opacity(configuration.isPressed ? 0.6 : 1)
-            .contentShape(Rectangle())
-            .onHover { isHovered = $0 }
-            .pointerStyle(.link)
     }
 }

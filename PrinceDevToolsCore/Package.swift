@@ -21,6 +21,6 @@ let package = Package(
         .testTarget(name: "SystemHealthTests", dependencies: ["SystemHealth"]),
         .testTarget(name: "PanelKitTests", dependencies: ["PanelKit"]),
         .testTarget(name: "LocalServersTests", dependencies: ["LocalServers"]),
-        .testTarget(name: "ContainersTests", dependencies: ["Containers"])
+        .testTarget(name: "ContainersTests", dependencies: ["Containers"], resources: [.process("Resources")])
     ]
 )

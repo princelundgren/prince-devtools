@@ -85,8 +85,12 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
   table is under the user's home or `$TMPDIR`.
 - **One runtime per engine:** symlinks are resolved first, then each socket's `GET /info` `ID`
   ("unique identifier of the daemon", per the Engine API) is compared, so an engine served at two
-  socket files is read once and its containers count once (this design's call). A socket from the
-  table keeps that table's name; any other is named after its context, or "Docker".
+  socket files counts once (this design's call): each is read, and the second is dropped. Only two
+  separate socket files, not a symlink, are read twice. An empty `ID` matches no other. A socket
+  from the table keeps that table's name; any other is named after its context, or "Docker".
+  Podman's `/info` gives a new `ID` on each call, so a Podman engine is matched by its resolved
+  socket path alone. A socket that fails has no `ID` to compare, so it shows as unreadable even
+  when another socket read its engine (this design's call).
 - **`DOCKER_HOST` is ignored:** an app started from the Finder doesn't get the shell's environment
   (this design's call).
 - **Not running:** a socket file that is missing, isn't a socket, or refuses the connection, is a
@@ -100,18 +104,30 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
 
 - **The connection:** HTTP/1.1 over the Unix socket with Network.framework (`NWConnection` to
   `NWEndpoint.unix(path:)`), since `URLSession` doesn't connect to Unix sockets. No new dependency.
-  - `GET /version` once per socket for `ApiVersion`; then the requests use that version in their
-    paths, never a pinned one.
-  - `GET /containers/json` lists the running containers: `Names`, `Image`, `Created`, `State`.
+  - `GET /version` first, on each read of a socket, for `ApiVersion`; then the requests use that
+    version in their paths, never a pinned one.
+  - `GET /containers/json` lists the running containers: `Id`, `Names`, `Image`, `Created`.
     Without `all=true`, so only running ones.
   - `GET /containers/{id}/stats?stream=false&one-shot=true` for each running container: its memory
     in use is `memory_stats.usage` less its inactive file cache, as `docker stats` figures it: less
     `stats.total_inactive_file` on cgroups v1, else less `stats.inactive_file` (v2), each only
-    while below `usage`. `one-shot` skips the two-sample wait, which only CPU needs.
+    while below `usage`. `one-shot` skips the two-sample wait, which only CPU needs. At most 16 are
+    in flight per engine.
   - Time up: from `Created`, since the list's `Status` text is for people, not parsing (this
     design's call; a restarted container then counts from its creation).
 - **Failures:** a runtime whose reads fail midway is one the app can't read, for that scan; a
-  container whose stats fail shows "—" for memory and is not counted in the card's total.
+  container whose stats fail, or whose memory figure is above `Int64.max`, shows "—" for memory
+  and is not counted in the card's total.
+- **More than 500 containers** from one engine make it a runtime the app can't read, never a
+  shortened list (this design's call): the cap bounds how long a scan reads and how many rows the
+  list holds.
+- **Values from the engine are checked** before they go into a request: an `ApiVersion` that
+  isn't `<digits>.<digits>` makes the runtime unreadable, and a container `Id` outside
+  `[0-9A-Za-z][0-9A-Za-z_.-]*` (so never `..`) gets no stats request and shows "—". Names and
+  images are cleaned as the runtime names from the disk are ("Which runtimes").
+- **Response limits:** 16 MiB for the container list, 64 KiB for each container's stats (a
+  recorded one-shot stats body is 1,768 bytes) and 1 MiB for every other response; a larger
+  response is a failed read.
 - **Timeouts:** each request has a short timeout of the builder's choosing, so a hung runtime
   never holds up the scan.
 
@@ -153,7 +169,7 @@ the one applied is dropped. The runtimes are read in parallel.
 ## Testing
 
 - **Unit tests** with recorded API responses: the socket list (a symlink to a known socket read
-  once, two sockets with one engine `ID` read once, a context socket, a `tcp://` context skipped),
+  once, two sockets with one engine `ID` as one, a context socket, a `tcp://` context skipped),
   a refused socket left out and a failing one shown as unreadable on the card and the list, the
   memory figure on cgroups v1 and v2, failed stats shown as "—" and left out of the total, a
   runtime failing midway, the card's wording for 0, 1 and many, the sort by memory, and a stale

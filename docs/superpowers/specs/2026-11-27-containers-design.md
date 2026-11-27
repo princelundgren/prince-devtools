@@ -150,7 +150,8 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
   call: the question is where the RAM goes).
 - **A click on the name or image copies it,** with the "Copied" confirmation, as Servers' cells.
   No row menu.
-- **Empty:** "No containers running".
+- **Empty:** "No containers running", unless no runtime was read and one couldn't be; then only
+  the lines naming the runtimes it couldn't read, as the card says "Can't read".
 - **Each runtime the app can't read** gets a line under the table naming it: "Couldn't read Podman".
 
 ## When it scans

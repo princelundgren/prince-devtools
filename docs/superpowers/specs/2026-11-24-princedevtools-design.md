@@ -100,8 +100,9 @@ single app must not become overwhelming (owner).
   2026-11-27): GitHub's Free plan runs 5 macOS jobs at a time for an account, and jobs waited up to
   42 minutes for one. A fork's pull request runs on GitHub's `xcode-27`, since the pool refuses
   its job. The release's other jobs and CodeQL stay on GitHub-hosted runners.
-- **No entitlements.** The app only opens other apps, so the release keeps prince-clockin's
-  signature and hardened-runtime checks and drops its Apple Events check.
+- **No entitlements.** The app opens other apps and connects to the container runtimes' Unix
+  sockets, neither of which needs one outside the App Sandbox, so the release keeps
+  prince-clockin's signature and hardened-runtime checks and drops its Apple Events check.
 - **Releases:** Developer ID signing, `notarytool`, Sparkle feed at
   `https://updates.princelundgren.com/princedevtools/appcast.xml` (the host's prefixes carry no
   hyphen). Sparkle settings as prince-clockin's `Info.plist`: signed feed required, verification
@@ -148,10 +149,10 @@ single app must not become overwhelming (owner).
 │ │ ● 70 GB free     │ │ ● 755/4000  │ │
 │ │                  │ │ ▬▬▬───────  │ │
 │ └──────────────────┘ └─────────────┘ │
-│ ┌─ Servers ────────┐                 │
-│ │ ⓘ 3 listening    │                 │
-│ │ 1 orphaned       │                 │
-│ └──────────────────┘                 │
+│ ┌─ Servers ────────┐ ┌─ Containers ┐ │
+│ │ ⓘ 3 listening    │ │ ⓘ 2 running │ │
+│ │ 1 orphaned       │ │ 1.2 GB      │ │
+│ └──────────────────┘ └─────────────┘ │
 ├──────────────────────────────────────┤
 │ ⚙                                  ⏻ │
 └──────────────────────────────────────┘
@@ -178,10 +179,11 @@ single app must not become overwhelming (owner).
   prince-clockin's tokens with their Increase Contrast variants. Each card is one VoiceOver
   element naming its value and state. A card that opens something on a click is a button,
   looking as the others do, whose VoiceOver hint says what the click does.
-- **A card that opens a list** (the Servers card, `2026-11-26-localhost-servers-design.md`): a
-  click shows the panel's second view, the list in place of the messages and cards, under a header
-  with Back and the tool's title. The footer stays; the panel widens for the list, narrows again
-  on Back, and opens on the cards each time.
+- **A card that opens a list** (the Servers card, `2026-11-26-localhost-servers-design.md`, and
+  the Containers card, `2026-11-27-containers-design.md`): a click shows the panel's second
+  view, the list in place of the messages and cards, under a header with Back and the tool's
+  title. The footer stays; the panel widens for the list, narrows again on Back, and opens on the
+  cards each time.
 - **The process card** shows the count over the limit with a thin linear gauge under it (owner:
   "a meter").
 - **Footer** as the Prince popover style: Settings left, Quit right. Sparkle's "update ready" row
@@ -327,9 +329,11 @@ Owner's requirement: no idle CPU, few idle wakeups, low RAM, no leaks.
   never writes the CPU ring, and scans processes only when a message appears or the panel opens
   on one (see Culprit); it stops when the panel closes. The 60 s tick, and its busy-process scan,
   keep running beside it. The servers tool scans once as the panel opens and every 2 s while its
-  list is shown (`2026-11-26-localhost-servers-design.md`, "When it scans").
-- **No subprocesses**, no polling of other apps, and no per-process scan while the panel is closed
-  except the busy-process one, which the tick runs only while the machine is busy enough for a
+  list is shown (`2026-11-26-localhost-servers-design.md`, "When it scans"), and the containers
+  tool reads the runtimes' sockets on the same occasions, but never runs two scans at once
+  (`2026-11-27-containers-design.md`, "When it scans").
+- **No subprocesses**; while the panel is closed, no polling of other apps and no per-process
+  scan except the busy-process one, which the tick runs only while the machine is busy enough for a
   process to be at its clearing share (see "One busy process"). A scan of the user's 890
   processes' CPU time measured 0.8 to 1.0 ms of CPU on a 12-core Mac, 2026-11-26, about 0.017 ms/s
   at one a minute; reading every path as well took 2.3 to 3.8 ms, which would break the CPU budget

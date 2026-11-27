@@ -153,6 +153,9 @@ At each scan the app looks for these Docker Engine API sockets, in this order:
 - **Empty:** "No containers running", unless no runtime was read and one couldn't be; then only
   the lines naming the runtimes it couldn't read, as the card says "Can't read".
 - **Each runtime the app can't read** gets a line under the table naming it: "Couldn't read Podman".
+- **Over 12 rows the table scrolls,** and builds each row only as it scrolls into view, so a long
+  list never builds all its rows at once; an engine with more than 500 containers is one the app
+  can't read ("Reading", this design's call).
 
 ## When it scans
 
@@ -168,8 +171,8 @@ flight, within about 70 s.
 
 - `PrinceDevToolsCore/Package.swift` gains a `Containers` library and its tests;
   `PrinceDevTools/project.yml` its product. No new dependency.
-- The app's design gains the card, its target list and its "adding a tool" lines, in the commits
-  that build them.
+- The app's design gains the card and its target list entry; its "adding a tool" line already
+  covers a tool with a list.
 
 ## Testing
 
@@ -187,13 +190,14 @@ flight, within about 70 s.
 ## Unverified
 
 - **Docker Desktop's Resource Saver:** it stops Docker Desktop's VM when no container has run for
-  a while, and its docs say listing commands "don't necessarily" wake it. The build checks that
-  opening the panel leaves the moon icon in place. If a list wakes it, that goes back to the owner
-  before the build goes on.
+  a while, and its docs say listing commands "don't necessarily" wake it. Not checked: Docker
+  Desktop wasn't installed where the build was tested, so whether opening the panel leaves the
+  moon icon in place is still open.
 - **The other runtimes:** whether connecting to a stopped Colima's, Podman's or Rancher Desktop's
   socket can start it. For OrbStack, its FAQ says a client that
-  connects while it is stopped gets "Cannot connect to the Docker daemon", so a read doesn't.
-  The build checks each runtime it can install the same way; one that wakes goes back to the owner.
+  connects while it is stopped gets "Cannot connect to the Docker daemon", so a read doesn't, and
+  the build confirmed it: four scans left a stopped OrbStack stopped. Colima, Podman and Rancher
+  Desktop weren't installed, so they are not checked.
 
 ## Left to the builder
 

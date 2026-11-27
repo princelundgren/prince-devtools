@@ -1,16 +1,18 @@
 import AppKit
+import Containers
 import LocalServers
 import SwiftUI
 import SystemHealth
 
-/// Owns the app's AppKit side: the health and server monitors, the system events they follow, the
-/// status item, the panel's popover, the Settings window and the hidden main menu.
+/// Owns the app's AppKit side: the health, server and container monitors, the system events they
+/// follow, the status item, the panel's popover, the Settings window and the hidden main menu.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private static let settingsFrameName = "Settings"
 
     private let monitor: HealthMonitor
     private let servers: ServerMonitor
+    private let containers: ContainerMonitor
     private let updater: Updater
     private let popover = NSPopover()
     private var statusItem: StatusItemController?
@@ -23,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     override init() {
         monitor = HealthMonitor()
         servers = ServerMonitor(source: .live)
+        containers = ContainerMonitor(source: .live)
         updater = Updater()
         super.init()
     }
@@ -88,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setUpPopover() {
         popover.behavior = .transient
         let panel = PanelView(
-            monitor: monitor, servers: servers, updater: updater,
+            monitor: monitor, servers: servers, containers: containers, updater: updater,
             openSettings: { [weak self] in self?.showSettings() })
         let hosting = NSHostingController(rootView: panel)
         hosting.sizingOptions = .preferredContentSize
@@ -99,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func popoverWillShow(_ notification: Notification) {
         monitor.panelOpened()
         servers.panelOpened()
+        containers.panelOpened()
     }
 
     /// Every close passes here: a click outside, the icon and Settings alike.
@@ -107,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         outsideClickMonitor = nil
         monitor.panelClosed()
         servers.panelClosed()
+        containers.panelClosed()
     }
 
     private func togglePanel() {

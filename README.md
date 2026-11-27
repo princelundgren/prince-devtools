@@ -6,8 +6,8 @@
 A macOS menu bar app that gathers a developer's everyday status and one-click actions in one
 panel, in place of a menu bar app for each job.
 
-**Status:** being built; there is no release yet. Its tools are system health and localhost
-servers.
+**Status:** being built; there is no release yet. Its tools are system health, localhost
+servers and containers.
 
 ## What it does
 
@@ -22,6 +22,9 @@ servers.
   of them with port, process, pid, folder and time running, marking those whose starting process
   has exited. A click copies the link, name or pid or shows the folder in Finder, and a row's menu
   opens it in the browser or stops it.
+- **Containers**: a card counting the containers running in Docker-compatible runtimes (OrbStack,
+  Docker Desktop, Podman, Colima, Rancher Desktop) and the memory they use, and a list of them
+  with name, image, runtime, time up and memory, largest first. A click copies the name or image.
 - **Cheap to run**: no idle CPU, about one wakeup a minute until the panel is first opened, low
   RAM.
 - **Private**: no telemetry, analytics or crash reporting.

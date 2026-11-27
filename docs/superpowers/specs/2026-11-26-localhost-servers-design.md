@@ -190,7 +190,7 @@ port floor) and one `lstat` per server (folder gone). No subprocess, no entitlem
 - The panel gains a second view (the list) and a way back.
 - `PanelKit`'s card becomes clickable for a card that opens something, and keeps today's look
   for those that don't; `PanelTone` gains the informational tone and its symbol.
-- The fifth card makes the grid three rows, the last with one card; the cards keep one size.
+- The fifth card makes the grid three rows; the cards keep one size.
 - `PrinceDevToolsCore/Package.swift` gains the `LocalServers` library and `LocalServersTests`, and
   `PrinceDevTools/project.yml` the product.
 - The app's design is updated in the commits that build these: its target list (`SystemHealth`,
